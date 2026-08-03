@@ -39,11 +39,11 @@ pod 'ZXNavigationBar'
 ### 效果预览
 导航栏设置 | 仿微博热搜效果 |  自定义导航栏  
 -|-|-
-![](http://www.zxlee.cn/github/ZXNavigationBar/ZXNavigationBarDemo1.gif) | ![](http://www.zxlee.cn/github/ZXNavigationBar/ZXNavigationBarDemo2.gif) | ![](http://www.zxlee.cn/github/ZXNavigationBar/ZXNavigationBarDemo3.gif) |
+![](http://zxlee.oss-cn-shanghai.aliyuncs.com/github/ZXNavigationBar/ZXNavigationBarDemo1.gif) | ![](http://zxlee.oss-cn-shanghai.aliyuncs.com/github/ZXNavigationBar/ZXNavigationBarDemo2.gif) | ![](http://zxlee.oss-cn-shanghai.aliyuncs.com/github/ZXNavigationBar/ZXNavigationBarDemo3.gif) |
 
 自定义titleView | 兼容scrollView横向滚动 |   可伸缩式导航栏
 -|-|-
-![](http://www.zxlee.cn/github/ZXNavigationBar/ZXNavigationBarDemo4.gif) | ![](http://www.zxlee.cn/github/ZXNavigationBar/ZXNavigationBarDemo8.gif) | ![](http://www.zxlee.cn/github/ZXNavigationBar/ZXNavigationBarDemo6.gif) | 
+![](http://zxlee.oss-cn-shanghai.aliyuncs.com/github/ZXNavigationBar/ZXNavigationBarDemo4.gif) | ![](http://zxlee.oss-cn-shanghai.aliyuncs.com/github/ZXNavigationBar/ZXNavigationBarDemo8.gif) | ![](http://zxlee.oss-cn-shanghai.aliyuncs.com/github/ZXNavigationBar/ZXNavigationBarDemo6.gif) | 
 
 ### 开始使用
 #### 将控制器继承于`ZXNavigationBarController`，建议将Base控制器继承于`ZXNavigationBarController`
