@@ -293,7 +293,12 @@
 }
 
 - (void)toggleSystemBar:(UIButton *)sender {
-    self.currentViewController.zx_showSystemNavBar = !self.currentViewController.zx_showSystemNavBar;
+    if (self.currentViewController.zx_showSystemNavBar) {
+        self.currentViewController.zx_showSystemNavBar = NO;
+        self.currentViewController.zx_hideBaseNavBar = NO;
+    } else {
+        self.currentViewController.zx_showSystemNavBar = YES;
+    }
     [self updateLayoutAfterFixtureAction];
 }
 
@@ -386,6 +391,17 @@
     [self.fixtureNavigationController.view layoutIfNeeded];
     [self.currentViewController.view layoutIfNeeded];
     [self.currentViewController.zx_navBar layoutIfNeeded];
+    NSString *verticalBehavior = @"unavailable";
+#if defined(__IPHONE_27_1) && __IPHONE_OS_VERSION_MAX_ALLOWED >= __IPHONE_27_1
+    if (@available(iOS 27.1, *)) {
+        if ([self.currentViewController respondsToSelector:@selector(preferredVerticalBarBehavior)]) {
+            verticalBehavior = self.currentViewController.preferredVerticalBarBehavior == UIVerticalBarBehaviorDisabled
+                ? @"disabled" : @"automatic";
+        }
+    }
+#endif
+    self.verticalBehaviorLabel.text = verticalBehavior;
+    self.verticalBehaviorLabel.accessibilityValue = verticalBehavior;
     CGRect containerFrame = [self.fixtureNavigationController.view.superview convertRect:self.fixtureNavigationController.view.frame toView:self.view];
     CGRect navigationFrame = [self.currentViewController.view convertRect:self.currentViewController.zx_navBar.frame toView:self.view];
     UILabel *titleLabel = self.currentViewController.zx_navTitleLabel;

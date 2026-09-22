@@ -48,9 +48,38 @@ static ZXNavStatusBarStyle defaultNavStatusBarStyle = ZXNavStatusBarStyleDefault
     }
     [self checkDoAutoSysBarAlpha];
     [self hanldeCustomPopGesture];
+    [self zx_requestVerticalBarConfigurationUpdate];
 }
 
 #pragma mark - private
+- (BOOL)zx_usesVisibleCustomNavigationBar {
+    return !self.zx_disableAutoSetCustomNavBar &&
+           !self.zx_showSystemNavBar &&
+           !self.zx_hideBaseNavBar &&
+           self.zx_navBar != nil &&
+           !self.zx_navBar.hidden;
+}
+
+#if defined(__IPHONE_27_1) && __IPHONE_OS_VERSION_MAX_ALLOWED >= __IPHONE_27_1
+- (UIVerticalBarBehavior)preferredVerticalBarBehavior API_AVAILABLE(ios(27.1)) {
+    if (@available(iOS 27.1, *)) {
+        return [self zx_usesVisibleCustomNavigationBar]
+            ? UIVerticalBarBehaviorDisabled : UIVerticalBarBehaviorAutomatic;
+    }
+    return UIVerticalBarBehaviorAutomatic;
+}
+
+- (void)zx_requestVerticalBarConfigurationUpdate {
+    if (@available(iOS 27.1, *)) {
+        if ([self respondsToSelector:@selector(setNeedsUpdateOfVerticalBarConfiguration)]) {
+            [self setNeedsUpdateOfVerticalBarConfiguration];
+        }
+    }
+}
+#else
+- (void)zx_requestVerticalBarConfigurationUpdate {}
+#endif
+
 #pragma mark 初始化导航栏
 -(void)initNavBar{
     ZXNavigationBar *navBar = [[ZXNavigationBar alloc]init];
@@ -450,6 +479,8 @@ static ZXNavStatusBarStyle defaultNavStatusBarStyle = ZXNavStatusBarStyleDefault
 
 
 - (void)setZx_hideBaseNavBar:(BOOL)zx_hideBaseNavBar{
+    BOOL stateChanged = _zx_hideBaseNavBar != zx_hideBaseNavBar ||
+        (self.zx_navBar && self.zx_navBar.hidden != zx_hideBaseNavBar);
     if(_zx_hideBaseNavBar != zx_hideBaseNavBar){
         if(zx_hideBaseNavBar){
             [self adjustNavContainerOffset:0 checkSafeArea:NO];
@@ -461,6 +492,9 @@ static ZXNavStatusBarStyle defaultNavStatusBarStyle = ZXNavStatusBarStyleDefault
     _zx_hideBaseNavBar = zx_hideBaseNavBar;
     if(self.zx_navBar){
         self.zx_navBar.hidden = zx_hideBaseNavBar;
+    }
+    if (stateChanged) {
+        [self zx_requestVerticalBarConfigurationUpdate];
     }
 }
 
@@ -483,6 +517,7 @@ static ZXNavStatusBarStyle defaultNavStatusBarStyle = ZXNavStatusBarStyleDefault
 }
 
 - (void)setZx_showSystemNavBar:(BOOL)zx_showSystemNavBar{
+    BOOL stateChanged = _zx_showSystemNavBar != zx_showSystemNavBar;
     _zx_showSystemNavBar = zx_showSystemNavBar;
     if(self.navigationController){
         self.zx_hideBaseNavBar = YES;
@@ -490,6 +525,15 @@ static ZXNavStatusBarStyle defaultNavStatusBarStyle = ZXNavStatusBarStyleDefault
         self.navigationController.navigationBarHidden = !zx_showSystemNavBar;
         [self checkDoAutoSysBarAlpha];
     }
+    if (stateChanged) {
+        [self zx_requestVerticalBarConfigurationUpdate];
+    }
+}
+
+- (void)setZx_disableAutoSetCustomNavBar:(BOOL)zx_disableAutoSetCustomNavBar {
+    if (_zx_disableAutoSetCustomNavBar == zx_disableAutoSetCustomNavBar) { return; }
+    _zx_disableAutoSetCustomNavBar = zx_disableAutoSetCustomNavBar;
+    [self zx_requestVerticalBarConfigurationUpdate];
 }
 
 - (void)setZx_navItemSize:(CGFloat)zx_navItemSize{

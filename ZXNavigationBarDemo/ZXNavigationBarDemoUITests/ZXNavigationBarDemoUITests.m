@@ -37,8 +37,47 @@
 - (void)testAdaptiveFixtureLaunchesWithoutChangingDefaultDemo {
     XCUIApplication *app = [self launchAdaptiveFixture];
 
-    XCTAssertTrue(app.staticTexts[@"fixture.nav.title"].exists);
+    NSDictionary *state = [self fixtureState:app];
+    [self assertNavigationElements:app insideContainer:[self fixtureRect:state[@"container"]] state:state];
     XCTAssertEqualObjects(app.buttons[@"fixture.nav.left"].label, @"Back");
+}
+
+- (void)testDefaultDemoLaunchesWithoutFixtureArguments {
+    XCUIApplication *app = [[XCUIApplication alloc] init];
+    [app launch];
+    XCTAssertTrue([app.tables.cells.staticTexts[@"ZXNavigationBar属性设置"] waitForExistenceWithTimeout:5]);
+    XCTAssertFalse(app.buttons[@"fixture.resize"].exists);
+}
+
+- (void)assertVerticalBarPolicyTransitions:(XCUIApplication *)app {
+    XCUIElement *behavior = app.staticTexts[@"fixture.verticalBehavior"];
+    XCTAssertEqualObjects(behavior.value, @"disabled");
+    [self tapFixtureControl:@"fixture.systemBar" app:app];
+    XCTAssertEqualObjects(behavior.value, @"automatic");
+    XCTAssertEqualObjects([self fixtureState:app][@"mode"], @"system");
+    [self tapFixtureControl:@"fixture.systemBar" app:app];
+    XCTAssertEqualObjects(behavior.value, @"disabled");
+    XCTAssertEqualObjects([self fixtureState:app][@"mode"], @"custom");
+    XCTAssertTrue(app.buttons[@"fixture.nav.left"].exists);
+}
+
+- (void)testVerticalBarPolicyMatchesVisibleNavigationMode {
+    XCUIApplication *app = [self launchAdaptiveFixture];
+    if (@available(iOS 27.1, *)) {
+        [self assertVerticalBarPolicyTransitions:app];
+    } else {
+        XCTAssertEqualObjects(app.staticTexts[@"fixture.verticalBehavior"].value, @"unavailable");
+    }
+}
+
+- (void)testTableVerticalBarPolicyMatchesVisibleNavigationMode {
+    XCUIApplication *app = [self launchAdaptiveFixture];
+    [self tapFixtureControl:@"fixture.tableMode" app:app];
+    if (@available(iOS 27.1, *)) {
+        [self assertVerticalBarPolicyTransitions:app];
+    } else {
+        XCTAssertEqualObjects(app.staticTexts[@"fixture.verticalBehavior"].value, @"unavailable");
+    }
 }
 
 - (NSDictionary<NSString *, NSString *> *)fixtureState:(XCUIApplication *)app {
