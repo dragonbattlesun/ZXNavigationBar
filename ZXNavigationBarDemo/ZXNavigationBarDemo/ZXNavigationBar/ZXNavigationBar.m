@@ -343,18 +343,13 @@
         }
         CGFloat maxItemWidth = MAX(leftBtnFakeWidth,rightBtnFakeWidth);
         CGRect titleFrame = CGRectMake(MIN(boundsWidth, MAX(0, maxItemWidth)), centerOffSet, MAX(0, boundsWidth - maxItemWidth * 2), CGRectGetHeight(contentBounds));
-        if (reservedFrames.count) {
-            NSMutableArray<NSValue *> *titleExclusions = [reservedFrames mutableCopy];
-            for (ZXNavItemBtn *button in @[self.zx_leftBtn, self.zx_rightBtn, self.zx_subLeftBtn, self.zx_subRightBtn]) {
-                if (CGRectGetWidth(button.frame) > 0) {
-                    // 水平方向的占用贯穿整行，标题不能与较矮按钮重叠。
-                    CGRect occupied = CGRectMake(CGRectGetMinX(button.frame), centerOffSet, CGRectGetWidth(button.frame), CGRectGetHeight(contentBounds));
-                    [titleExclusions addObject:[NSValue valueWithCGRect:occupied]];
-                }
-            }
-            titleFrame = ZXNavigationBarLargestHorizontalSegment(ZXNavigationBarAvailableHorizontalSegments(contentBounds, safeAreaInsets, titleExclusions));
-        }
-        self.zx_titleLabel.frame = titleFrame;
+        NSArray<NSValue *> *buttonFrames = @[
+            [NSValue valueWithCGRect:self.zx_leftBtn.frame],
+            [NSValue valueWithCGRect:self.zx_rightBtn.frame],
+            [NSValue valueWithCGRect:self.zx_subLeftBtn.frame],
+            [NSValue valueWithCGRect:self.zx_subRightBtn.frame]
+        ];
+        self.zx_titleLabel.frame = ZXNavigationBarTitleFrame(contentBounds, safeAreaInsets, reservedFrames, buttonFrames, titleFrame);
         self.zx_titleView.frame = self.zx_titleLabel.frame;
         self.zx_lineView.frame = CGRectMake(CGRectGetMinX(self.bounds), CGRectGetMaxY(self.bounds) - self.zx_lineViewHeight, boundsWidth, self.zx_lineViewHeight);
         self.zx_bacImageView.frame = self.bounds;

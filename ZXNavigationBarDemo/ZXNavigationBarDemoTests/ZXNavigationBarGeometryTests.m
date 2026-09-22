@@ -179,4 +179,39 @@ FOUNDATION_EXPORT NSArray<NSValue *> *ZXNavigationBarGeometryFilterActiveReserve
     [self assertRect:ZXNavigationBarLargestHorizontalSegment(segments) equals:CGRectZero];
 }
 
+- (void)testTitleKeepsSymmetricFrameForRegionOutsideContentRow {
+    [self assertTitleUnchangedByRegion:CGRectMake(390, 64, 20, 30)];
+}
+
+- (void)testTitleKeepsSymmetricFrameForRegionOutsideSafeContent {
+    // 已由 safe area 避让的外缘遮挡，不能再次切换标题布局策略。
+    [self assertTitleUnchangedByRegion:CGRectMake(-20, 0, 44, 100)];
+    [self assertTitleUnchangedByRegion:CGRectMake(760, 0, 80, 100)];
+}
+
+- (void)assertTitleUnchangedByRegion:(CGRect)region {
+    CGRect content = CGRectMake(0, 20, 800, 44);
+    UIEdgeInsets safe = UIEdgeInsetsMake(0, 24, 0, 40);
+    NSArray *buttons = @[
+        [NSValue valueWithCGRect:CGRectMake(40, 27, 40, 30)],
+        [NSValue valueWithCGRect:CGRectMake(680, 27, 64, 30)]
+    ];
+    CGRect symmetric = CGRectMake(136, 20, 528, 44);
+    CGRect withoutRegion = ZXNavigationBarTitleFrame(content, safe, @[], buttons, symmetric);
+    CGRect withRegion = ZXNavigationBarTitleFrame(content, safe, @[[NSValue valueWithCGRect:region]], buttons, symmetric);
+    [self assertRect:withoutRegion equals:symmetric];
+    [self assertRect:withRegion equals:withoutRegion];
+}
+
+- (void)testTitleSelectsLargestRemainingFrameForEffectiveRegion {
+    CGRect content = CGRectMake(0, 20, 300, 44);
+    NSArray *regions = @[[NSValue valueWithCGRect:CGRectMake(100, 0, 20, 100)]];
+    NSArray *buttons = @[
+        [NSValue valueWithCGRect:CGRectMake(0, 27, 40, 30)],
+        [NSValue valueWithCGRect:CGRectMake(250, 27, 50, 30)]
+    ];
+    CGRect title = ZXNavigationBarTitleFrame(content, UIEdgeInsetsZero, regions, buttons, CGRectMake(50, 20, 200, 44));
+    [self assertRect:title equals:CGRectMake(120, 20, 130, 44)];
+}
+
 @end

@@ -11,6 +11,7 @@
 
 @property (strong, nonatomic) ZXNavigationBarNavigationController *fixtureNavigationController;
 @property (strong, nonatomic) ZXNavigationBarController *currentViewController;
+@property (weak, nonatomic) ZXNavigationBar *configuredNavigationBar;
 @property (strong, nonatomic) NSLayoutConstraint *containerLeadingConstraint;
 @property (strong, nonatomic) NSLayoutConstraint *containerWidthConstraint;
 @property (strong, nonatomic) UILabel *verticalBehaviorLabel;
@@ -36,7 +37,6 @@
 
 - (void)viewDidLayoutSubviews {
     [super viewDidLayoutSubviews];
-    [self configureNavigationAccessibility];
     [self updateFixtureState];
 }
 
@@ -136,9 +136,10 @@
 
 - (void)configureNavigationAccessibility {
     ZXNavigationBarController *viewController = self.currentViewController;
-    if (!viewController.zx_navBar) {
+    if (!viewController.zx_navBar || self.configuredNavigationBar == viewController.zx_navBar) {
         return;
     }
+    self.configuredNavigationBar = viewController.zx_navBar;
 
     viewController.zx_navLeftBtn.accessibilityIdentifier = @"fixture.nav.left";
     viewController.zx_navLeftBtn.accessibilityLabel = @"Back";

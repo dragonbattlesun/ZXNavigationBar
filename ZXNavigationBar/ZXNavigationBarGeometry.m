@@ -196,3 +196,30 @@ CGRect ZXNavigationBarConstrainHorizontalFrame(CGRect frame, CGRect segment) {
     frame.size.width = MAX(0, endX - originX);
     return frame;
 }
+
+CGRect ZXNavigationBarTitleFrame(
+    CGRect contentBounds,
+    UIEdgeInsets safeAreaInsets,
+    NSArray<NSValue *> *reservedFrames,
+    NSArray<NSValue *> *buttonFrames,
+    CGRect symmetricTitleFrame
+) {
+    NSArray<NSValue *> *unobstructedSegments = ZXNavigationBarAvailableHorizontalSegments(contentBounds, safeAreaInsets, @[]);
+    NSArray<NSValue *> *availableSegments = ZXNavigationBarAvailableHorizontalSegments(contentBounds, safeAreaInsets, reservedFrames);
+    // 行外或已在安全区之外的 region 不改变内容区，继续沿用对称居中。
+    if ([availableSegments isEqualToArray:unobstructedSegments]) {
+        return symmetricTitleFrame;
+    }
+    NSMutableArray<NSValue *> *titleExclusions = [reservedFrames mutableCopy];
+    for (NSValue *value in buttonFrames) {
+        CGRect frame = value.CGRectValue;
+        if (CGRectGetWidth(frame) > 0) {
+            // 按钮的水平占用贯穿内容行，保留既有标题避让语义。
+            CGRect occupied = CGRectMake(CGRectGetMinX(frame), CGRectGetMinY(contentBounds),
+                                         CGRectGetWidth(frame), CGRectGetHeight(contentBounds));
+            [titleExclusions addObject:[NSValue valueWithCGRect:occupied]];
+        }
+    }
+    return ZXNavigationBarLargestHorizontalSegment(
+        ZXNavigationBarAvailableHorizontalSegments(contentBounds, safeAreaInsets, titleExclusions));
+}
