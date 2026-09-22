@@ -633,11 +633,12 @@
 - Modify: `ZXNavigationBarDemo/ZXNavigationBarDemo/Demo/DemoAdaptiveLayoutViewController/DemoAdaptiveLayoutViewController.m`
 - Modify: `ZXNavigationBarDemo/ZXNavigationBarDemoTests/ZXNavigationBarGeometryTests.m`
 - Modify: `ZXNavigationBarDemo/ZXNavigationBarDemoUITests/ZXNavigationBarDemoUITests.m`
+- Modify: `ZXNavigationBarDemo/ZXNavigationBarDemo.xcodeproj/project.pbxproj`
 - Modify: `README.md`
 
 - [ ] **Step 1：先修正审计发现的跨 Scene 背景写入**
 
-  在 `ZXNavigationBarGeometryTests.m` 增加 owning window 回归：把导航栏挂到独立 `UIWindow`，启用 `zx_navEnableSmoothFromSystemNavBar` 后设置背景色，断言只更新该导航栏的 `self.window.backgroundColor`。旧实现通过 `UIApplication.keyWindow` 写入任意 Scene，测试必须先 RED；随后生产和 Demo 镜像都改为 `self.window.backgroundColor`，导航栏尚未入窗时安全无操作。
+  现有 `ZXNavigationBarDemoTests` 是只编译几何助手的未宿主逻辑测试，先在工程中把它配置为由 `ZXNavigationBarDemo.app` 宿主并建立 target dependency，保证测试访问的是 Demo 镜像的真实 `ZXNavigationBar`，不复制一套测试专用源码。在 `ZXNavigationBarGeometryTests.m` 增加 owning window 回归：把导航栏挂到独立 `UIWindow`，启用 `zx_navEnableSmoothFromSystemNavBar` 后设置背景色，断言只更新该导航栏的 `self.window.backgroundColor`。旧实现通过 `UIApplication.keyWindow` 写入任意 Scene，测试必须先 RED；随后生产和 Demo 镜像都改为 `self.window.backgroundColor`，导航栏尚未入窗时安全无操作。生产与 Demo 的逐字 diff 继续作为生产副本一致性证据。
 
 - [ ] **Step 2：增加语义稳定性测试**
 
@@ -690,7 +691,8 @@
     test
   git add ZXNavigationBar/ZXNavigationBar.m \
     ZXNavigationBarDemo/ZXNavigationBarDemo/ZXNavigationBar/ZXNavigationBar.m \
-    ZXNavigationBarDemo/ZXNavigationBarDemoTests/ZXNavigationBarGeometryTests.m
+    ZXNavigationBarDemo/ZXNavigationBarDemoTests/ZXNavigationBarGeometryTests.m \
+    ZXNavigationBarDemo/ZXNavigationBarDemo.xcodeproj/project.pbxproj
   git commit -m "fix(多窗口): 将平滑背景绑定当前窗口"
   git add README.md \
     ZXNavigationBarDemo/ZXNavigationBarDemo/Demo/DemoAdaptiveLayoutViewController/DemoAdaptiveLayoutViewController.m \
