@@ -1,18 +1,23 @@
 #import "ZXNavigationBarGeometry.h"
-#import <objc/message.h>
+
+@protocol ZXNavigationBarReservedRegionReading <NSObject>
+
+@property (nonatomic, readonly) BOOL isActive;
+@property (nonatomic, readonly) CGRect frame;
+
+@end
 
 __attribute__((visibility("hidden")))
 NSArray<NSValue *> *ZXNavigationBarGeometryFilterActiveReservedRegionFrames(NSArray *regions) {
     NSMutableArray<NSValue *> *frames = [NSMutableArray array];
-    for (id region in regions) {
+    for (id value in regions) {
+        id<ZXNavigationBarReservedRegionReading> region = value;
         if (![region respondsToSelector:@selector(isActive)] ||
             ![region respondsToSelector:@selector(frame)]) {
             continue;
         }
-        BOOL active = ((BOOL (*)(id, SEL))objc_msgSend)(region, @selector(isActive));
-        CGRect frame = ((CGRect (*)(id, SEL))objc_msgSend)(region, @selector(frame));
-        if (active && !CGRectIsEmpty(frame)) {
-            [frames addObject:[NSValue valueWithCGRect:frame]];
+        if (region.isActive && !CGRectIsEmpty(region.frame)) {
+            [frames addObject:[NSValue valueWithCGRect:region.frame]];
         }
     }
     return frames;
@@ -65,11 +70,11 @@ NSArray<NSValue *> *ZXNavigationBarActiveReservedRegionFramesForView(UIView *vie
             return @[];
         }
 
-        id occlusionKind = ((id (*)(id, SEL))objc_msgSend)(kindClass, occlusionKindSelector);
-        id divisionKind = ((id (*)(id, SEL))objc_msgSend)(kindClass, divisionKindSelector);
+        id occlusionKind = [UIViewReservedRegionKind occlusionRegionKind];
+        id divisionKind = [UIViewReservedRegionKind divisionRegionKind];
         NSMutableArray<NSValue *> *frames = [NSMutableArray array];
         for (id kind in @[occlusionKind, divisionKind]) {
-            NSArray *regions = ((NSArray *(*)(id, SEL, id))objc_msgSend)(view, reservedRegionsSelector, kind);
+            NSArray *regions = [view reservedRegionsOfKind:kind];
             [frames addObjectsFromArray:ZXNavigationBarGeometryFilterActiveReservedRegionFrames(regions)];
         }
         return frames;
