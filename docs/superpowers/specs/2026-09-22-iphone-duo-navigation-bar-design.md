@@ -181,7 +181,7 @@ TalkMePRD 当前 `origin/main` 的 iPhone Duo V1.1 草案仍保留 iOS 16.0 表�
 2. **resize**：改变子容器宽度和 origin 后，导航栏、标题与按钮在一次布局周期内更新；导航栈和 fixture 状态不重置。
 3. **非对称安全区**：分别增加 leading / trailing inset，左右按钮各自避让对应边，不使用同一个对称值。
 4. **reserved region 区段**：使用合成 division / occlusion frame 验证区段相减、重叠去重、外缘收紧、inactive 排除、标题区段选择和零宽回退。
-5. **竖屏转横屏、横屏转竖屏**：通过 `XCUIDevice.orientation` 执行双向旋转；导航栏宽度、按钮可见性和标题可用区在最终方向正确。
+5. **竖屏转横屏、横屏转竖屏**：普通 Simulator 通过 `XCUIDevice.orientation` 执行双向旋转；若 iPhone Duo runtime 接收该输入但真实 `UIWindowScene.effectiveGeometry` 与 window bounds 不变，Demo fixture 可用公开 `requestGeometryUpdateWithPreferences:errorHandler:` 请求同一场景的横／竖屏几何。两条路径都必须等待真实 scene 与 window 收敛，不得直接改 frame；Scene 请求只作为自动化输入回退，不替代 Device Hub 物理姿态验收。
 6. **旋转叠加 resize**：先 resize 再旋转、先旋转再 resize，最终 frame 只由最新容器几何决定。
 7. **折叠动画中旋转**：触发栏折叠后立即旋转；宽度更新、动画目标高度和完成回调保持正确。
 8. **历史浮层**：浮层挂载当前 window，旋转 / resize 后仍显示、cover 填满容器，列表锚定当前返回按钮且不跨 safe area。

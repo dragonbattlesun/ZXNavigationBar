@@ -16,7 +16,7 @@
 - iOS 27.1 类型必须同时受 `defined(__IPHONE_27_1)`、`__IPHONE_OS_VERSION_MAX_ALLOWED >= __IPHONE_27_1` 和 `@available(iOS 27.1, *)` 保护，保证 Xcode 27.0 SDK 可编译。
 - 不删除现有公开宏或公开属性；新实现停止在目标路径中使用 `ZXScreenWidth`、`ZXMainWindow`、`ZXHorizontaledSafeArea`、`ZXAppStatusBarHeight` 和 `UIApplication.keyWindow`。
 - `ZXNavigationBar/` 是生产源码；`ZXNavigationBarDemo/ZXNavigationBarDemo/ZXNavigationBar/` 是 Demo 镜像。每个生产补丁完成后，同步同一逻辑到镜像，不覆盖 `ZXNavItemBtn.m` 与 `ZXNavigationBarTableViewController.m` 的历史差异。
-- 所有 UI 测试辅助功能文案使用英文；identifier 稳定且不参与多语言。
+- 所有 UI 测试辅助功能文案使用英文；identifier 稳定且不参与多语言。旋转测试先发送 `XCUIDevice.orientation`；若 iPhone Duo 的真实 `UIWindowScene.effectiveGeometry` 与 window bounds 在有界等待内不变，可通过 Demo fixture 调用公开 `requestGeometryUpdateWithPreferences:errorHandler:` 请求同一 scene 的目标方向，但必须验证实际 scene/window 收敛并记录请求错误。禁止直接改 window/view frame；该回退不算 Device Hub 物理姿态证据。
 - 每个行为先写失败测试并保存首次失败摘要，再写最小实现；每个任务绿灯后独立提交。不得 push、merge、tag 或发布 Pod。
 - 构建产物放到 `${TMPDIR%/}/ZXNavigationBar-workflow-iphone-duo-adaptation`，不污染仓库；测试设备按本分支创建，不复用其他 worktree 的专属模拟器。由于本机 Xcode 使用 Custom/Absolute build location，本计划每条普通 `build` / `test` 命令除 `-derivedDataPath "$BUILD_ROOT"` 外，还必须传入 `OBJROOT="$BUILD_ROOT/Build/Intermediates.noindex"`、`SYMROOT="$BUILD_ROOT/Build/Products"`、`DSTROOT="$BUILD_ROOT/Dst"` 与 `SHARED_PRECOMPS_DIR="$BUILD_ROOT/Build/Intermediates.noindex/PrecompiledHeaders"`；其中 `BUILD_ROOT` 等于该命令原本的 DerivedData 路径。执行前以同配置 `-showBuildSettings` 确认展开路径不落入 `/Volumes/T7-APFS/Xcode/DerivedData`，验证报告再核对实际编译、链接与签名路径。不得修改用户级 Xcode 偏好。
 
@@ -566,6 +566,8 @@
   新增 `testHistoryOverlayStaysInCurrentWindowAcrossRotationAndResize`：展示历史栈后断言 overlay/list 存在；旋转 landscape、执行 resize、恢复 portrait，每一步都断言 overlay 仍存在、cover 等于当前 container bounds、list 未越过 safe bounds，返回按钮 identifier/label 不变。
 
   旧实现预期在 `UIDeviceOrientationDidChangeNotification` 后自动移除 overlay，此失败即为正确 RED。
+
+  测试启动后先把真实 scene 规范化到 portrait，再展示 overlay，避免前次运行持久的 orientation 污染起点。普通 iOS 17 Simulator 继续使用 `XCUIDevice`；Duo 若不驱动真实 scene，则按全局约束使用公开 Scene 几何请求。无论输入路径如何，展示后的 overlay、list 与 history data 必须保持同一实例，且 window bounds 必须真实经历 portrait → landscape → portrait。
 
 - [ ] **Step 2：增加带容器和锚点的展示入口，保留旧 API**
 
