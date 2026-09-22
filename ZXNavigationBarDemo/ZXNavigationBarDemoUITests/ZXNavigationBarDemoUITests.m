@@ -18,6 +18,11 @@
     self.continueAfterFailure = NO;
 }
 
+- (void)tearDown {
+    XCUIDevice.sharedDevice.orientation = UIDeviceOrientationPortrait;
+    [super tearDown];
+}
+
 - (XCUIApplication *)launchAdaptiveFixture {
     XCUIDevice.sharedDevice.orientation = UIDeviceOrientationPortrait;
 
@@ -107,6 +112,100 @@
     XCTAssertLessThanOrEqual(CGRectGetMaxX(frame), CGRectGetMaxX(container) + 0.5);
     XCTAssertGreaterThanOrEqual(CGRectGetMinY(frame), CGRectGetMinY(container) - 0.5);
     XCTAssertLessThanOrEqual(CGRectGetMaxY(frame), CGRectGetMaxY(container) + 0.5);
+}
+
+- (void)rotate:(UIDeviceOrientation)orientation app:(XCUIApplication *)app {
+    NSInteger revision = [self fixtureState:app][@"revision"].integerValue;
+    XCUIDevice.sharedDevice.orientation = orientation;
+    NSPredicate *finished = [NSPredicate predicateWithBlock:^BOOL(id object, NSDictionary *bindings) {
+        NSDictionary *state = [self fixtureState:app];
+        return [state[@"revision"] integerValue] > revision &&
+            [state[@"landscape"] boolValue] == UIDeviceOrientationIsLandscape(orientation);
+    }];
+    [self expectationForPredicate:finished evaluatedWithObject:app handler:nil];
+    [self waitForExpectationsWithTimeout:10 handler:nil];
+}
+
+- (void)assertCurrentGeometry:(XCUIApplication *)app checkContent:(BOOL)checkContent {
+    NSDictionary *state = [self fixtureState:app];
+    CGRect container = [self fixtureRect:state[@"container"]];
+    CGRect nav = [self fixtureRect:state[@"nav"]];
+    XCTAssertEqualWithAccuracy(nav.size.width, container.size.width, 0.5, @"%@", state);
+    XCTAssertEqualWithAccuracy(nav.size.height, [state[@"status"] doubleValue] + 44, 0.5, @"%@", state);
+    if (checkContent) {
+        CGRect safe = [self fixtureRect:state[@"safe"]];
+        XCTAssertEqualWithAccuracy([state[@"contentTop"] doubleValue], 12 + nav.size.height - safe.origin.x, 0.5, @"%@", state);
+    }
+}
+
+- (void)testPortraitLandscapeAndPortraitConvergeToCurrentContainer {
+    XCUIApplication *app = [self launchAdaptiveFixture];
+    [self rotate:UIDeviceOrientationLandscapeLeft app:app];
+    [self assertCurrentGeometry:app checkContent:YES];
+    [self rotate:UIDeviceOrientationPortrait app:app];
+    [self assertCurrentGeometry:app checkContent:YES];
+    XCTAssertEqualObjects([self fixtureState:app][@"stack"], @"2");
+}
+
+- (void)testResizeThenRotateAndRotateThenResizeHaveSameFinalGeometry {
+    XCUIApplication *app = [self launchAdaptiveFixture];
+    [self tapFixtureControl:@"fixture.resize" app:app];
+    [self rotate:UIDeviceOrientationLandscapeLeft app:app];
+    NSDictionary *resizeThenRotate = [self fixtureState:app];
+    [self assertCurrentGeometry:app checkContent:YES];
+    [self rotate:UIDeviceOrientationPortrait app:app];
+    [self tapFixtureControl:@"fixture.resize" app:app];
+    [self rotate:UIDeviceOrientationLandscapeLeft app:app];
+    [self tapFixtureControl:@"fixture.resize" app:app];
+    NSDictionary *rotateThenResize = [self fixtureState:app];
+    for (NSString *key in @[@"container", @"nav", @"title", @"contentTop", @"stack"]) {
+        XCTAssertEqualObjects(resizeThenRotate[key], rotateThenResize[key], @"%@", key);
+    }
+    [self assertCurrentGeometry:app checkContent:YES];
+    [self rotate:UIDeviceOrientationPortrait app:app];
+    [self assertCurrentGeometry:app checkContent:YES];
+}
+
+- (void)testTableControllerPreservesScrollStateAcrossRotation {
+    XCUIApplication *app = [self launchAdaptiveFixture];
+    [self tapFixtureControl:@"fixture.tableMode" app:app];
+    [self tapFixtureControl:@"fixture.scroll" app:app];
+    CGFloat offset = [self fixtureState:app][@"offset"].doubleValue;
+    XCTAssertGreaterThan(offset, 0);
+    for (NSNumber *orientation in @[@(UIDeviceOrientationLandscapeLeft), @(UIDeviceOrientationPortrait)]) {
+        [self rotate:orientation.integerValue app:app];
+        [self assertCurrentGeometry:app checkContent:NO];
+        NSDictionary *state = [self fixtureState:app];
+        XCTAssertEqualWithAccuracy([state[@"offset"] doubleValue], offset, 0.5);
+        XCTAssertEqualWithAccuracy([state[@"inset"] doubleValue], [state[@"status"] doubleValue] + 44, 0.5);
+        CGRect container = [self fixtureRect:state[@"container"]];
+        CGRect nav = [self fixtureRect:state[@"nav"]];
+        XCTAssertEqualWithAccuracy(nav.origin.y, container.origin.y, 0.5);
+        XCTAssertEqualObjects(state[@"stack"], @"3");
+    }
+}
+
+- (void)testRotationDuringFoldPreservesTargetStateAndUpdatesWidth {
+    XCUIApplication *app = [self launchAdaptiveFixture];
+    [self tapFixtureControl:@"fixture.foldRotation" app:app];
+    [self rotate:UIDeviceOrientationLandscapeLeft app:app];
+    NSPredicate *completed = [NSPredicate predicateWithBlock:^BOOL(id object, NSDictionary *bindings) {
+        return [self fixtureState:app][@"foldCompletions"].integerValue == 1;
+    }];
+    [self expectationForPredicate:completed evaluatedWithObject:app handler:nil];
+    [self waitForExpectationsWithTimeout:10 handler:nil];
+    NSDictionary *state = [self fixtureState:app];
+    XCTAssertGreaterThan([state[@"foldSamples"] integerValue], 0);
+    XCTAssertEqualWithAccuracy([state[@"foldWidthError"] doubleValue], 0, 0.5, @"%@", state);
+    XCTAssertEqualObjects(state[@"folded"], @"1");
+    [self rotate:UIDeviceOrientationPortrait app:app];
+    state = [self fixtureState:app];
+    CGRect nav = [self fixtureRect:state[@"nav"]];
+    CGRect container = [self fixtureRect:state[@"container"]];
+    XCTAssertEqualWithAccuracy(nav.size.width, container.size.width, 0.5);
+    XCTAssertEqualWithAccuracy(nav.size.height, [state[@"status"] doubleValue], 0.5);
+    XCTAssertEqualObjects(state[@"folded"], @"1");
+    XCTAssertEqualObjects(state[@"foldCompletions"], @"1");
 }
 
 @end

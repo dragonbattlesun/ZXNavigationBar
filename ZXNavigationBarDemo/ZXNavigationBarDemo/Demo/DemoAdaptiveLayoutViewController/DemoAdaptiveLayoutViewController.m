@@ -6,6 +6,37 @@
 #import "DemoAdaptiveLayoutViewController.h"
 #import "ZXNavigationBarController.h"
 #import "ZXNavigationBarNavigationController.h"
+#import "ZXNavigationBarTableViewController.h"
+#import "ZXNavigationBarGeometry.h"
+
+// 在基类初始化前建立与 XIB 相同的 safe-area 顶部约束。
+@interface DemoAdaptiveContentController : ZXNavigationBarController
+@property (strong, nonatomic) NSLayoutConstraint *contentTopConstraint;
+@end
+@implementation DemoAdaptiveContentController
+- (void)viewDidLoad {
+    UIView *content = [[UIView alloc] init];
+    content.translatesAutoresizingMaskIntoConstraints = NO;
+    [self.view addSubview:content];
+    self.contentTopConstraint = [content.topAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.topAnchor constant:12];
+    [NSLayoutConstraint activateConstraints:@[self.contentTopConstraint,
+        [content.leadingAnchor constraintEqualToAnchor:self.view.leadingAnchor],
+        [content.widthAnchor constraintEqualToConstant:1], [content.heightAnchor constraintEqualToConstant:1]]];
+    [super viewDidLoad];
+}
+@end
+
+@interface DemoAdaptiveTableController : ZXNavigationBarTableViewController
+@end
+@implementation DemoAdaptiveTableController
+- (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section { return 100; }
+- (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath {
+    UITableViewCell *cell = [tableView dequeueReusableCellWithIdentifier:@"fixture.row"];
+    if (!cell) { cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleDefault reuseIdentifier:@"fixture.row"]; }
+    cell.textLabel.text = [NSString stringWithFormat:@"Row %ld", (long)indexPath.row];
+    return cell;
+}
+@end
 
 @interface DemoAdaptiveLayoutViewController ()
 
@@ -21,6 +52,12 @@
 @property (assign, nonatomic) BOOL tableModeRequested;
 @property (assign, nonatomic) CGFloat leadingInset;
 @property (assign, nonatomic) CGFloat trailingInset;
+@property (strong, nonatomic) NSLayoutConstraint *containerHeightConstraint;
+@property (assign, nonatomic) BOOL foldOnNextRotation;
+@property (assign, nonatomic) BOOL rotating;
+@property (assign, nonatomic) NSInteger foldCompletions;
+@property (assign, nonatomic) NSInteger foldingRotationSamples;
+@property (assign, nonatomic) CGFloat foldingWidthError;
 
 @end
 
@@ -40,12 +77,47 @@
     [self updateFixtureState];
 }
 
+- (void)viewWillLayoutSubviews {
+    [super viewWillLayoutSubviews];
+    self.containerWidthConstraint.constant = CGRectGetWidth(self.view.bounds) * 0.8 - (self.usesCompactContainer ? 60 : 0);
+    self.containerHeightConstraint.constant = CGRectGetWidth(self.view.bounds) > CGRectGetHeight(self.view.bounds) ? 100 : 210;
+}
+
+- (void)viewWillTransitionToSize:(CGSize)size withTransitionCoordinator:(id<UIViewControllerTransitionCoordinator>)coordinator {
+    [super viewWillTransitionToSize:size withTransitionCoordinator:coordinator];
+    self.rotating = YES;
+    if (self.foldOnNextRotation) {
+        self.foldOnNextRotation = NO;
+        __weak typeof(self) weakSelf = self;
+        [self.currentViewController zx_setNavFolded:YES speed:1 foldingOffsetBlock:^(CGFloat offset) {
+            // 首个真实折叠 tick 中叠加 resize，保证转场期间也覆盖已开始的折叠动画。
+            if (weakSelf.foldingRotationSamples == 0 && weakSelf.rotating) {
+                weakSelf.usesCompactContainer = YES;
+                [weakSelf.view setNeedsLayout];
+                [weakSelf.view layoutIfNeeded];
+            }
+            [weakSelf.currentViewController.view layoutIfNeeded];
+            if (weakSelf.rotating) {
+                weakSelf.foldingRotationSamples += 1;
+                weakSelf.foldingWidthError = MAX(weakSelf.foldingWidthError, fabs(CGRectGetWidth(weakSelf.currentViewController.zx_navBar.frame) - CGRectGetWidth(weakSelf.currentViewController.view.bounds)));
+            }
+        } foldCompletionBlock:^{
+            weakSelf.foldCompletions += 1;
+            [weakSelf updateLayoutAfterFixtureAction];
+        }];
+    }
+    [coordinator animateAlongsideTransition:nil completion:^(id<UIViewControllerTransitionCoordinatorContext> context) {
+        self.rotating = NO;
+        [self updateLayoutAfterFixtureAction];
+    }];
+}
+
 - (void)setUpNavigationFixture {
     ZXNavigationBarController *previousViewController = [[ZXNavigationBarController alloc] init];
     previousViewController.zx_navTitle = @"Previous";
     previousViewController.zx_showNavHistoryStackContentView = YES;
 
-    ZXNavigationBarController *currentViewController = [[ZXNavigationBarController alloc] init];
+    ZXNavigationBarController *currentViewController = [[DemoAdaptiveContentController alloc] init];
     currentViewController.zx_navTitle = @"Fixture Navigation";
     currentViewController.zx_showNavHistoryStackContentView = YES;
     self.currentViewController = currentViewController;
@@ -62,11 +134,12 @@
 
     self.containerLeadingConstraint = [navigationView.leadingAnchor constraintEqualToAnchor:self.view.leadingAnchor constant:24.0];
     self.containerWidthConstraint = [navigationView.widthAnchor constraintEqualToConstant:320.0];
+    self.containerHeightConstraint = [navigationView.heightAnchor constraintEqualToConstant:210.0];
     [NSLayoutConstraint activateConstraints:@[
         self.containerLeadingConstraint,
         self.containerWidthConstraint,
         [navigationView.topAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.topAnchor constant:8.0],
-        [navigationView.heightAnchor constraintEqualToConstant:210.0]
+        self.containerHeightConstraint
     ]];
 
     [currentViewController view];
@@ -86,6 +159,8 @@
     ]];
     UIStackView *thirdRow = [self rowWithViews:@[
         [self buttonWithTitle:@"Table mode" identifier:@"fixture.tableMode" accessibilityLabel:@"Toggle table mode" action:@selector(toggleTableMode:)],
+        [self buttonWithTitle:@"Scroll" identifier:@"fixture.scroll" accessibilityLabel:@"Scroll table" action:@selector(scrollTable:)],
+        [self buttonWithTitle:@"Fold rotation" identifier:@"fixture.foldRotation" accessibilityLabel:@"Fold during next rotation" action:@selector(armFoldRotation:)]
     ]];
 
     self.verticalBehaviorLabel = [[UILabel alloc] init];
@@ -196,8 +271,28 @@
 }
 
 - (void)toggleTableMode:(UIButton *)sender {
-    self.tableModeRequested = !self.tableModeRequested;
+    if (self.tableModeRequested) { return; }
+    self.tableModeRequested = YES;
+    DemoAdaptiveTableController *tableController = [[DemoAdaptiveTableController alloc] initWithStyle:UITableViewStylePlain];
+    tableController.zx_navTitle = @"Fixture Navigation";
+    [self.fixtureNavigationController pushViewController:tableController animated:NO];
+    // 两个库基类提供相同的导航栏公开接口；这里只复用 fixture 的观测路径。
+    self.currentViewController = (ZXNavigationBarController *)(id)tableController;
+    [tableController view];
+    [self configureNavigationAccessibility];
     sender.accessibilityValue = self.tableModeRequested ? @"on" : @"off";
+    [self updateLayoutAfterFixtureAction];
+}
+
+- (void)scrollTable:(UIButton *)sender {
+    if (self.tableModeRequested) {
+        [(DemoAdaptiveTableController *)(id)self.currentViewController tableView].contentOffset = CGPointMake(0, 440);
+    }
+    [self updateLayoutAfterFixtureAction];
+}
+
+- (void)armFoldRotation:(UIButton *)sender {
+    self.foldOnNextRotation = YES;
     [self updateLayoutAfterFixtureAction];
 }
 
@@ -232,6 +327,13 @@
                             CGRectGetMinX(titleFrame), CGRectGetMinY(titleFrame), CGRectGetWidth(titleFrame), CGRectGetHeight(titleFrame),
                             titleLabel.accessibilityIdentifier, titleLabel.accessibilityLabel];
     self.stateLabel.accessibilityValue = self.stateLabel.text;
+    CGFloat topConstraint = [self.currentViewController isKindOfClass:DemoAdaptiveContentController.class] ? ((DemoAdaptiveContentController *)self.currentViewController).contentTopConstraint.constant : 0;
+    UITableView *table = self.tableModeRequested ? [(DemoAdaptiveTableController *)(id)self.currentViewController tableView] : nil;
+    NSString *details = [NSString stringWithFormat:@";status=%.1f;contentTop=%.1f;offset=%.1f;inset=%.1f;foldCompletions=%ld;foldSamples=%ld;foldWidthError=%.1f;landscape=%d;stack=%lu",
+        ZXNavigationBarStatusBarHeightForView(self.currentViewController.view), topConstraint, table.contentOffset.y, table.contentInset.top,
+        (long)self.foldCompletions, (long)self.foldingRotationSamples, self.foldingWidthError,
+        CGRectGetWidth(self.view.bounds) > CGRectGetHeight(self.view.bounds), (unsigned long)self.fixtureNavigationController.viewControllers.count];
+    self.stateLabel.accessibilityValue = [self.stateLabel.text stringByAppendingString:details];
 }
 
 @end
