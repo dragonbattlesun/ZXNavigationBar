@@ -9,9 +9,11 @@
 #import "DemoWeiboHotViewController.h"
 #import "UIView+ZXNavFrameExtension.h"
 #import "DemoSystemBarViewController.h"
+#import "ZXNavigationBarGeometry.h"
 @interface DemoWeiboHotViewController()<UITableViewDelegate,UITableViewDataSource>
 @property (strong, nonatomic) UITableView *tableView;
 @property (strong, nonatomic) NSArray *datas;
+@property (strong, nonatomic) UILabel *geometryProbe;
 @end
 @implementation DemoWeiboHotViewController
 
@@ -40,14 +42,51 @@
 - (void)setUpViewAndData{
     self.datas = @[@"武汉加油，中国加油🇨🇳",@"武汉加油，中国加油🇨🇳",@"武汉加油，中国加油🇨🇳",@"武汉加油，中国加油🇨🇳",@"武汉加油，中国加油🇨🇳",@"武汉加油，中国加油🇨🇳",@"武汉加油，中国加油🇨🇳",@"武汉加油，中国加油🇨🇳",@"武汉加油，中国加油🇨🇳",@"武汉加油，中国加油🇨🇳",@"武汉加油，中国加油🇨🇳",@"武汉加油，中国加油🇨🇳",@"武汉加油，中国加油🇨🇳",@"武汉加油，中国加油🇨🇳",@"武汉加油，中国加油🇨🇳",@"武汉加油，中国加油🇨🇳",@"武汉加油，中国加油🇨🇳",@"武汉加油，中国加油🇨🇳",@"武汉加油，中国加油🇨🇳",@"武汉加油，中国加油🇨🇳"];
     self.tableView = [[UITableView alloc]initWithFrame:CGRectZero style:UITableViewStyleGrouped];
+    self.tableView.accessibilityIdentifier = @"demo.weibo.feed";
     [self.view addSubview:self.tableView];
     self.tableView.delegate = self;
     self.tableView.dataSource = self;
+
+    if ([[NSProcessInfo processInfo].arguments containsObject:@"ZXNavigationBarGeometryUITests"]) {
+        UILabel *probe = [[UILabel alloc] initWithFrame:CGRectMake(0, 0, 1, 1)];
+        probe.text = @" ";
+        probe.textColor = UIColor.clearColor;
+        probe.backgroundColor = UIColor.clearColor;
+        probe.isAccessibilityElement = YES;
+        probe.accessibilityIdentifier = @"demo.weibo.geometry";
+        probe.accessibilityLabel = @"Continuous feed geometry";
+        probe.userInteractionEnabled = NO;
+        [self.view addSubview:probe];
+        self.geometryProbe = probe;
+    }
 }
 
 - (void)viewDidLayoutSubviews{
     [super viewDidLayoutSubviews];
     self.tableView.frame = CGRectMake(0, 0, self.view.frame.size.width, self.view.frame.size.height);
+    if (self.geometryProbe) {
+        self.geometryProbe.frame = CGRectMake(0, MAX(0, CGRectGetHeight(self.view.bounds) - 1), 1, 1);
+    }
+    [self updateGeometryProbe];
+}
+
+- (void)updateGeometryProbe {
+    UIWindow *window = self.view.window;
+    if (!window || !self.geometryProbe) {
+        return;
+    }
+    CGRect viewFrame = [self.view.superview convertRect:self.view.frame toView:window];
+    CGRect tableFrame = [self.tableView.superview convertRect:self.tableView.frame toView:window];
+    CGRect navFrame = [self.zx_navBar.superview convertRect:self.zx_navBar.frame toView:window];
+    UITableViewCell *firstCell = [self.tableView cellForRowAtIndexPath:[NSIndexPath indexPathForRow:0 inSection:0]];
+    CGRect firstCellFrame = firstCell ? [firstCell.superview convertRect:firstCell.frame toView:window] : CGRectZero;
+    self.geometryProbe.accessibilityValue = [NSString stringWithFormat:
+        @"view={%.1f,%.1f,%.1f,%.1f};table={%.1f,%.1f,%.1f,%.1f};nav={%.1f,%.1f,%.1f,%.1f};navContent=%.1f;firstCell={%.1f,%.1f,%.1f,%.1f}",
+        CGRectGetMinX(viewFrame), CGRectGetMinY(viewFrame), CGRectGetWidth(viewFrame), CGRectGetHeight(viewFrame),
+        CGRectGetMinX(tableFrame), CGRectGetMinY(tableFrame), CGRectGetWidth(tableFrame), CGRectGetHeight(tableFrame),
+        CGRectGetMinX(navFrame), CGRectGetMinY(navFrame), CGRectGetWidth(navFrame), CGRectGetHeight(navFrame),
+        CGRectGetHeight(self.zx_navBar.bounds) - ZXNavigationBarStatusBarHeightForView(self.zx_navBar),
+        CGRectGetMinX(firstCellFrame), CGRectGetMinY(firstCellFrame), CGRectGetWidth(firstCellFrame), CGRectGetHeight(firstCellFrame)];
 }
 
 #pragma mark 设置导航栏为黑色
@@ -92,6 +131,12 @@
 - (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath{
     UITableViewCell *cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleDefault reuseIdentifier:nil];
     cell.textLabel.text = self.datas[indexPath.row];
+    if (indexPath.row == 0) {
+        cell.accessibilityIdentifier = @"demo.weibo.feed.firstCell";
+        dispatch_async(dispatch_get_main_queue(), ^{
+            [self updateGeometryProbe];
+        });
+    }
     return cell;
 }
 

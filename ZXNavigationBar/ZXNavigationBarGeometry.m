@@ -36,25 +36,9 @@ UIEdgeInsets ZXNavigationBarSafeAreaInsetsForView(UIView *view) {
 }
 
 CGFloat ZXNavigationBarStatusBarHeightForView(UIView *view) {
-    UIEdgeInsets safeAreaInsets = ZXNavigationBarSafeAreaInsetsForView(view);
-    if (@available(iOS 13.0, *)) {
-        CGFloat statusBarHeight = view.window.windowScene.statusBarManager.statusBarFrame.size.height;
-        if (statusBarHeight > 0) {
-            return statusBarHeight;
-        }
-    }
-    if (safeAreaInsets.top > 0) {
-        return safeAreaInsets.top;
-    }
-    if (@available(iOS 13.0, *)) {
-        if (view.window) {
-            return 0;
-        }
-    }
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wdeprecated-declarations"
-    return UIApplication.sharedApplication.statusBarFrame.size.height;
-#pragma clang diagnostic pop
+    // 保留旧函数名以维持源码兼容；返回值只表达当前 View 自身承担的顶部安全区。
+    // Scene / UIApplication 的全局状态栏高度会让已位于安全区内的嵌套 View 重复增高。
+    return MAX(0, ZXNavigationBarSafeAreaInsetsForView(view).top);
 }
 
 NSArray<NSValue *> *ZXNavigationBarActiveReservedRegionFramesForView(UIView *view) {
@@ -195,6 +179,163 @@ CGRect ZXNavigationBarConstrainHorizontalFrame(CGRect frame, CGRect segment) {
     frame.origin.x = originX;
     frame.size.width = MAX(0, endX - originX);
     return frame;
+}
+
+CGRect ZXNavigationBarFitHorizontalFrame(CGRect preferredFrame, NSArray<NSValue *> *segments) {
+    CGRect bestSegment = CGRectZero;
+    CGFloat bestDistance = CGFLOAT_MAX;
+    CGFloat anchorX = CGRectGetMinX(preferredFrame);
+    for (NSValue *value in segments) {
+        CGRect segment = value.CGRectValue;
+        if (CGRectIsEmpty(segment)) {
+            continue;
+        }
+        CGFloat distance = 0;
+        if (anchorX < CGRectGetMinX(segment)) {
+            distance = CGRectGetMinX(segment) - anchorX;
+        } else if (anchorX > CGRectGetMaxX(segment)) {
+            distance = anchorX - CGRectGetMaxX(segment);
+        }
+        if (distance < bestDistance) {
+            bestDistance = distance;
+            bestSegment = segment;
+        }
+    }
+    if (bestDistance == CGFLOAT_MAX) {
+        preferredFrame.size.width = 0;
+        return preferredFrame;
+    }
+
+    CGFloat width = MIN(MAX(0, CGRectGetWidth(preferredFrame)), CGRectGetWidth(bestSegment));
+    CGFloat minimumX = CGRectGetMinX(bestSegment);
+    CGFloat maximumX = CGRectGetMaxX(bestSegment) - width;
+    preferredFrame.origin.x = MIN(MAX(anchorX, minimumX), maximumX);
+    preferredFrame.size.width = width;
+    return preferredFrame;
+}
+
+NSArray<NSValue *> *ZXNavigationBarAvailableVerticalSegments(
+    CGRect contentBounds,
+    UIEdgeInsets safeAreaInsets,
+    NSArray<NSValue *> *excludedFrames
+) {
+    CGFloat height = MAX(0, CGRectGetHeight(contentBounds) - safeAreaInsets.top - safeAreaInsets.bottom);
+    CGRect safeBounds = CGRectMake(CGRectGetMinX(contentBounds),
+                                   CGRectGetMinY(contentBounds) + safeAreaInsets.top,
+                                   CGRectGetWidth(contentBounds),
+                                   height);
+    if (CGRectIsEmpty(safeBounds)) {
+        return @[];
+    }
+
+    NSMutableArray<NSValue *> *clippedFrames = [NSMutableArray array];
+    for (NSValue *value in excludedFrames) {
+        CGRect excludedFrame = value.CGRectValue;
+        if (CGRectIsEmpty(excludedFrame) ||
+            CGRectGetMaxX(excludedFrame) <= CGRectGetMinX(contentBounds) ||
+            CGRectGetMinX(excludedFrame) >= CGRectGetMaxX(contentBounds)) {
+            continue;
+        }
+
+        CGRect clippedFrame = CGRectIntersection(excludedFrame, safeBounds);
+        if (!CGRectIsEmpty(clippedFrame)) {
+            [clippedFrames addObject:[NSValue valueWithCGRect:clippedFrame]];
+        }
+    }
+
+    [clippedFrames sortUsingComparator:^NSComparisonResult(NSValue *leftValue, NSValue *rightValue) {
+        CGRect leftFrame = leftValue.CGRectValue;
+        CGRect rightFrame = rightValue.CGRectValue;
+        if (CGRectGetMinY(leftFrame) < CGRectGetMinY(rightFrame)) {
+            return NSOrderedAscending;
+        }
+        if (CGRectGetMinY(leftFrame) > CGRectGetMinY(rightFrame)) {
+            return NSOrderedDescending;
+        }
+        if (CGRectGetMaxY(leftFrame) < CGRectGetMaxY(rightFrame)) {
+            return NSOrderedAscending;
+        }
+        if (CGRectGetMaxY(leftFrame) > CGRectGetMaxY(rightFrame)) {
+            return NSOrderedDescending;
+        }
+        return NSOrderedSame;
+    }];
+
+    NSMutableArray<NSValue *> *mergedFrames = [NSMutableArray array];
+    for (NSValue *value in clippedFrames) {
+        CGRect frame = value.CGRectValue;
+        CGRect previousFrame = mergedFrames.lastObject.CGRectValue;
+        if (mergedFrames.count == 0 || CGRectGetMinY(frame) > CGRectGetMaxY(previousFrame)) {
+            [mergedFrames addObject:value];
+            continue;
+        }
+
+        CGFloat mergedMinY = CGRectGetMinY(previousFrame);
+        CGFloat mergedMaxY = MAX(CGRectGetMaxY(previousFrame), CGRectGetMaxY(frame));
+        mergedFrames[mergedFrames.count - 1] = [NSValue valueWithCGRect:CGRectMake(
+            CGRectGetMinX(safeBounds),
+            mergedMinY,
+            CGRectGetWidth(safeBounds),
+            mergedMaxY - mergedMinY
+        )];
+    }
+
+    NSMutableArray<NSValue *> *segments = [NSMutableArray array];
+    CGFloat cursorY = CGRectGetMinY(safeBounds);
+    for (NSValue *value in mergedFrames) {
+        CGRect frame = value.CGRectValue;
+        if (CGRectGetMinY(frame) > cursorY) {
+            [segments addObject:[NSValue valueWithCGRect:CGRectMake(
+                CGRectGetMinX(safeBounds),
+                cursorY,
+                CGRectGetWidth(safeBounds),
+                CGRectGetMinY(frame) - cursorY
+            )]];
+        }
+        cursorY = MAX(cursorY, CGRectGetMaxY(frame));
+    }
+    if (cursorY < CGRectGetMaxY(safeBounds)) {
+        [segments addObject:[NSValue valueWithCGRect:CGRectMake(
+            CGRectGetMinX(safeBounds),
+            cursorY,
+            CGRectGetWidth(safeBounds),
+            CGRectGetMaxY(safeBounds) - cursorY
+        )]];
+    }
+    return segments;
+}
+
+CGRect ZXNavigationBarFitVerticalFrame(CGRect preferredFrame, NSArray<NSValue *> *segments) {
+    CGRect bestSegment = CGRectZero;
+    CGFloat bestDistance = CGFLOAT_MAX;
+    CGFloat anchorY = CGRectGetMinY(preferredFrame);
+    for (NSValue *value in segments) {
+        CGRect segment = value.CGRectValue;
+        if (CGRectIsEmpty(segment)) {
+            continue;
+        }
+        CGFloat distance = 0;
+        if (anchorY < CGRectGetMinY(segment)) {
+            distance = CGRectGetMinY(segment) - anchorY;
+        } else if (anchorY > CGRectGetMaxY(segment)) {
+            distance = anchorY - CGRectGetMaxY(segment);
+        }
+        if (distance < bestDistance) {
+            bestDistance = distance;
+            bestSegment = segment;
+        }
+    }
+    if (bestDistance == CGFLOAT_MAX) {
+        preferredFrame.size.height = 0;
+        return preferredFrame;
+    }
+
+    CGFloat height = MIN(MAX(0, CGRectGetHeight(preferredFrame)), CGRectGetHeight(bestSegment));
+    CGFloat minimumY = CGRectGetMinY(bestSegment);
+    CGFloat maximumY = CGRectGetMaxY(bestSegment) - height;
+    preferredFrame.origin.y = MIN(MAX(anchorY, minimumY), maximumY);
+    preferredFrame.size.height = height;
+    return preferredFrame;
 }
 
 CGRect ZXNavigationBarTitleFrame(

@@ -14,6 +14,20 @@ FOUNDATION_EXPORT NSArray<NSValue *> *ZXNavigationBarGeometryFilterActiveReserve
 @implementation ZXNavigationBarReservedRegionDouble
 @end
 
+@interface ZXNavigationBarLocalSafeAreaView : UIView
+
+@property (nonatomic, assign) UIEdgeInsets stubbedSafeAreaInsets;
+
+@end
+
+@implementation ZXNavigationBarLocalSafeAreaView
+
+- (UIEdgeInsets)safeAreaInsets {
+    return self.stubbedSafeAreaInsets;
+}
+
+@end
+
 @interface ZXNavigationBarGeometryTests : XCTestCase
 @end
 
@@ -86,6 +100,44 @@ FOUNDATION_EXPORT NSArray<NSValue *> *ZXNavigationBarGeometryFilterActiveReserve
     XCTAssertEqualWithAccuracy(insets.left, 0, 0.5);
     XCTAssertEqualWithAccuracy(insets.bottom, 0, 0.5);
     XCTAssertEqualWithAccuracy(insets.right, 0, 0.5);
+}
+
+- (void)testStatusHeightUsesAttachedViewsLocalSafeAreaInsteadOfSceneStatusBar {
+    UIWindow *hostWindow = [self keyWindowForHostedApplication];
+    XCTAssertNotNil(hostWindow);
+    if (!hostWindow) {
+        return;
+    }
+
+    ZXNavigationBarLocalSafeAreaView *nestedView = [[ZXNavigationBarLocalSafeAreaView alloc] initWithFrame:CGRectMake(0, 100, 200, 100)];
+    nestedView.stubbedSafeAreaInsets = UIEdgeInsetsMake(7, 0, 0, 0);
+    [hostWindow addSubview:nestedView];
+
+    XCTAssertEqualWithAccuracy(ZXNavigationBarStatusBarHeightForView(nestedView), 7, 0.5);
+    [nestedView removeFromSuperview];
+}
+
+- (void)testStatusHeightDoesNotLeakSceneStatusIntoNestedSafeArea {
+    UIWindow *hostWindow = [self keyWindowForHostedApplication];
+    XCTAssertNotNil(hostWindow);
+    if (!hostWindow) {
+        return;
+    }
+
+    ZXNavigationBarLocalSafeAreaView *nestedView = [[ZXNavigationBarLocalSafeAreaView alloc] initWithFrame:CGRectMake(0, 100, 200, 100)];
+    nestedView.stubbedSafeAreaInsets = UIEdgeInsetsZero;
+    [hostWindow addSubview:nestedView];
+
+    XCTAssertEqualWithAccuracy(ZXNavigationBarStatusBarHeightForView(nestedView), 0, 0.5);
+    [nestedView removeFromSuperview];
+}
+
+- (void)testStatusHeightForUnattachedViewIsDeterministicZero {
+    ZXNavigationBarLocalSafeAreaView *unattachedView = [ZXNavigationBarLocalSafeAreaView new];
+    unattachedView.stubbedSafeAreaInsets = UIEdgeInsetsZero;
+
+    XCTAssertNil(unattachedView.window);
+    XCTAssertEqualWithAccuracy(ZXNavigationBarStatusBarHeightForView(unattachedView), 0, 0.5);
 }
 
 - (void)testMiddleDivisionSplitsContentIntoTwoSegments {
@@ -206,6 +258,73 @@ FOUNDATION_EXPORT NSArray<NSValue *> *ZXNavigationBarGeometryFilterActiveReserve
     [self assertRect:secondary equals:CGRectMake(45, 25, 0, 30)];
     [self assertRect:ZXNavigationBarConstrainHorizontalFrame(CGRectMake(5, 25, 40, 30), segment)
               equals:CGRectMake(20, 25, 25, 30)];
+}
+
+- (void)testPreferredFrameStaysInAnchorSegmentWhenDivisionWouldBeCrossed {
+    NSArray<NSValue *> *segments = @[
+        [NSValue valueWithCGRect:CGRectMake(0, 80, 180, 300)],
+        [NSValue valueWithCGRect:CGRectMake(200, 80, 300, 300)]
+    ];
+
+    CGRect fitted = ZXNavigationBarFitHorizontalFrame(CGRectMake(40, 80, 250, 220), segments);
+
+    [self assertRect:fitted equals:CGRectMake(0, 80, 180, 220)];
+}
+
+- (void)testPreferredFrameUsesNearestSegmentAndPreservesAvailableWidth {
+    NSArray<NSValue *> *segments = @[
+        [NSValue valueWithCGRect:CGRectMake(0, 80, 180, 300)],
+        [NSValue valueWithCGRect:CGRectMake(200, 80, 300, 300)]
+    ];
+
+    CGRect fitted = ZXNavigationBarFitHorizontalFrame(CGRectMake(230, 80, 250, 220), segments);
+
+    [self assertRect:fitted equals:CGRectMake(230, 80, 250, 220)];
+}
+
+- (void)testPreferredFrameCollapsesWhenNoHorizontalSegmentExists {
+    CGRect fitted = ZXNavigationBarFitHorizontalFrame(CGRectMake(40, 80, 250, 220), @[]);
+
+    [self assertRect:fitted equals:CGRectMake(40, 80, 0, 220)];
+}
+
+- (void)testHorizontalDivisionProducesVerticalSegmentsAboveAndBelowFold {
+    CGRect content = CGRectMake(0, 0, 400, 600);
+    NSArray<NSValue *> *regions = @[
+        [NSValue valueWithCGRect:CGRectMake(0, 200, 400, 20)]
+    ];
+
+    NSArray<NSValue *> *segments = ZXNavigationBarAvailableVerticalSegments(
+        content,
+        UIEdgeInsetsMake(10, 0, 30, 0),
+        regions
+    );
+
+    XCTAssertEqual(segments.count, 2U);
+    [self assertRect:segments[0].CGRectValue equals:CGRectMake(0, 10, 400, 190)];
+    [self assertRect:segments[1].CGRectValue equals:CGRectMake(0, 220, 400, 350)];
+}
+
+- (void)testVerticalFitKeepsHistoryVisibleAboveHorizontalDivision {
+    NSArray<NSValue *> *segments = @[
+        [NSValue valueWithCGRect:CGRectMake(0, 0, 400, 200)],
+        [NSValue valueWithCGRect:CGRectMake(0, 220, 400, 380)]
+    ];
+
+    CGRect fitted = ZXNavigationBarFitVerticalFrame(CGRectMake(20, 50, 250, 220), segments);
+
+    [self assertRect:fitted equals:CGRectMake(20, 0, 250, 200)];
+}
+
+- (void)testVerticalFitUsesNearestSegmentBelowHorizontalDivision {
+    NSArray<NSValue *> *segments = @[
+        [NSValue valueWithCGRect:CGRectMake(0, 0, 400, 200)],
+        [NSValue valueWithCGRect:CGRectMake(0, 220, 400, 380)]
+    ];
+
+    CGRect fitted = ZXNavigationBarFitVerticalFrame(CGRectMake(20, 260, 250, 220), segments);
+
+    [self assertRect:fitted equals:CGRectMake(20, 260, 250, 220)];
 }
 
 - (void)testTitleUsesLargestSegmentAfterBothButtonGroupsAreExcluded {

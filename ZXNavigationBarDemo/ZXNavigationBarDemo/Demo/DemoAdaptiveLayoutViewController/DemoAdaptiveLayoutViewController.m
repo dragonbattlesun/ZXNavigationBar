@@ -28,6 +28,10 @@ static UIInterfaceOrientation DemoSceneOrientation(UIWindowScene *scene) {
     NSArray *(^rect)(CGRect) = ^NSArray *(CGRect value) {
         return @[@(value.origin.x), @(value.origin.y), @(value.size.width), @(value.size.height)];
     };
+    NSMutableArray<NSArray<NSNumber *> *> *reserved = [NSMutableArray array];
+    for (NSValue *value in ZXNavigationBarActiveReservedRegionFramesForView(overlay)) {
+        [reserved addObject:rect(value.CGRectValue)];
+    }
     NSDictionary *state = @{
         @"overlay": [NSString stringWithFormat:@"%p", overlay],
         @"list": [NSString stringWithFormat:@"%p", overlay.zx_historyStackView],
@@ -38,6 +42,7 @@ static UIInterfaceOrientation DemoSceneOrientation(UIWindowScene *scene) {
         @"container": rect(self.container.bounds), @"bounds": rect(overlay.bounds),
         @"cover": rect(cover.frame), @"safe": rect(safe),
         @"frame": rect(overlay.zx_historyStackView.frame),
+        @"reserved": reserved,
         @"anchor": rect([self.anchor convertRect:self.anchor.bounds toView:overlay]),
         @"backIdentifier": self.anchor.accessibilityIdentifier ?: @"",
         @"backLabel": self.anchor.accessibilityLabel ?: @""
@@ -133,6 +138,26 @@ static UIInterfaceOrientation DemoSceneOrientation(UIWindowScene *scene) {
     [self setUpNavigationFixture];
     [self setUpControls];
 }
+
+- (void)viewDidAppear:(BOOL)animated {
+    [super viewDidAppear:animated];
+    [self requestVerticalBarConfigurationUpdate];
+}
+
+#if defined(__IPHONE_27_1) && __IPHONE_OS_VERSION_MAX_ALLOWED >= __IPHONE_27_1
+- (UIViewController *)childViewControllerForPreferredVerticalBarBehavior API_AVAILABLE(ios(27.1)) {
+    // Demo fixture 是自定义容器；显式转发后，内嵌导航控制器的 active child 才能决定系统栏轴向。
+    return self.fixtureNavigationController;
+}
+
+- (void)requestVerticalBarConfigurationUpdate {
+    if (@available(iOS 27.1, *)) {
+        [self setNeedsUpdateOfVerticalBarConfiguration];
+    }
+}
+#else
+- (void)requestVerticalBarConfigurationUpdate {}
+#endif
 
 - (void)viewDidLayoutSubviews {
     [super viewDidLayoutSubviews];
@@ -299,8 +324,9 @@ static UIInterfaceOrientation DemoSceneOrientation(UIWindowScene *scene) {
     viewController.zx_navRightBtn.accessibilityIdentifier = @"fixture.nav.right";
     viewController.zx_navRightBtn.accessibilityLabel = @"Primary action";
 
-    [viewController.zx_navSubLeftBtn setTitle:@"Sub left" forState:UIControlStateNormal];
-    [viewController.zx_navSubRightBtn setTitle:@"Sub right" forState:UIControlStateNormal];
+    // 测试夹具使用紧凑视觉标题，把受限宽度优先留给真实标题；完整语义由英文 accessibilityLabel 保留。
+    [viewController.zx_navSubLeftBtn setTitle:@"L2" forState:UIControlStateNormal];
+    [viewController.zx_navSubRightBtn setTitle:@"R2" forState:UIControlStateNormal];
     [viewController.zx_navRightBtn setTitle:@"Action" forState:UIControlStateNormal];
 }
 
@@ -487,6 +513,7 @@ static UIInterfaceOrientation DemoSceneOrientation(UIWindowScene *scene) {
 
 - (void)updateLayoutAfterFixtureAction {
     self.revision += 1;
+    [self requestVerticalBarConfigurationUpdate];
     [self.view setNeedsLayout];
     [self.view layoutIfNeeded];
     [self updateFixtureState];
@@ -509,16 +536,23 @@ static UIInterfaceOrientation DemoSceneOrientation(UIWindowScene *scene) {
     self.verticalBehaviorLabel.accessibilityValue = verticalBehavior;
     CGRect containerFrame = [self.fixtureNavigationController.view.superview convertRect:self.fixtureNavigationController.view.frame toView:self.view];
     CGRect navigationFrame = [self.currentViewController.view convertRect:self.currentViewController.zx_navBar.frame toView:self.view];
+    UINavigationBar *systemNavigationBar = self.fixtureNavigationController.navigationBar;
+    CGRect systemNavigationFrame = systemNavigationBar.superview
+        ? [systemNavigationBar.superview convertRect:systemNavigationBar.frame toView:self.view]
+        : CGRectZero;
     UILabel *titleLabel = self.currentViewController.zx_navTitleLabel;
     CGRect titleFrame = [titleLabel.superview convertRect:titleLabel.frame toView:self.view];
     UIEdgeInsets safeAreaInsets = self.currentViewController.view.safeAreaInsets;
     NSString *mode = self.currentViewController.zx_showSystemNavBar ? @"system" : @"custom";
-    self.stateLabel.text = [NSString stringWithFormat:@"revision=%ld;container={%.1f,%.1f,%.1f,%.1f};nav={%.1f,%.1f,%.1f,%.1f};safe={%.1f,%.1f,%.1f,%.1f};mode=%@;folded=%d;table=%d;title={%.1f,%.1f,%.1f,%.1f};titleIdentifier=%@;titleLabel=%@",
+    self.stateLabel.text = [NSString stringWithFormat:@"revision=%ld;container={%.1f,%.1f,%.1f,%.1f};nav={%.1f,%.1f,%.1f,%.1f};systemNav={%.1f,%.1f,%.1f,%.1f};safe={%.1f,%.1f,%.1f,%.1f};mode=%@;customHidden=%d;systemHidden=%d;folded=%d;table=%d;title={%.1f,%.1f,%.1f,%.1f};titleIdentifier=%@;titleLabel=%@",
                             (long)self.revision,
                             CGRectGetMinX(containerFrame), CGRectGetMinY(containerFrame), CGRectGetWidth(containerFrame), CGRectGetHeight(containerFrame),
                             CGRectGetMinX(navigationFrame), CGRectGetMinY(navigationFrame), CGRectGetWidth(navigationFrame), CGRectGetHeight(navigationFrame),
+                            CGRectGetMinX(systemNavigationFrame), CGRectGetMinY(systemNavigationFrame), CGRectGetWidth(systemNavigationFrame), CGRectGetHeight(systemNavigationFrame),
                             safeAreaInsets.top, safeAreaInsets.left, safeAreaInsets.bottom, safeAreaInsets.right,
                             mode,
+                            self.currentViewController.zx_navBar.hidden,
+                            systemNavigationBar.hidden,
                             self.currentViewController.zx_navIsFolded,
                             self.tableModeRequested,
                             CGRectGetMinX(titleFrame), CGRectGetMinY(titleFrame), CGRectGetWidth(titleFrame), CGRectGetHeight(titleFrame),

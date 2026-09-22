@@ -11,6 +11,7 @@
 #import "ZXNavHistoryStackCell.h"
 
 #import "ZXNavigationBarDefine.h"
+#import "ZXNavigationBarGeometry.h"
 #import "UIView+ZXNavFrameExtension.h"
 
 #import <UIKit/UIFeedbackGenerator.h>
@@ -146,17 +147,43 @@ static UIWindow *ZXHistoryWindowForContainer(UIView *container) {
             self.hasValidAnchorRect = YES;
         }
     }
-    CGFloat width = MIN(ZXNavHistoryStackViewWidth, safe.size.width);
     CGFloat x = self.hasValidAnchorRect ? self.lastAnchorRect.origin.x + self.anchorOffsetX : self.zx_historyStackViewLeft;
     CGFloat y = self.hasValidAnchorRect ? self.lastAnchorRect.origin.y : CGRectGetMinY(safe);
     if (!isfinite(x)) { x = CGRectGetMinX(safe); }
     if (!isfinite(y)) { y = CGRectGetMinY(safe); }
-    x = MIN(MAX(x, CGRectGetMinX(safe)), CGRectGetMaxX(safe) - width);
     y = MIN(MAX(y, CGRectGetMinY(safe)), CGRectGetMaxY(safe));
     CGFloat height = MIN(self.zx_historyStackArray.count * ZXNavHistoryStackCellHeight, MAX(0, CGRectGetMaxY(safe) - y));
-    CGRect frame = CGRectMake(x, y, width, height);
+    CGFloat width = MIN(ZXNavHistoryStackViewWidth, safe.size.width);
+    CGRect preferredFrame = CGRectMake(x, y, width, height);
+    CGRect contentBand = CGRectMake(CGRectGetMinX(safe), y, CGRectGetWidth(safe), height);
+    NSArray<NSValue *> *reservedFrames = ZXNavigationBarActiveReservedRegionFramesForView(self);
+    NSArray<NSValue *> *segments = ZXNavigationBarAvailableHorizontalSegments(
+        contentBand,
+        UIEdgeInsetsZero,
+        reservedFrames
+    );
+    CGRect frame = ZXNavigationBarFitHorizontalFrame(preferredFrame, segments);
+    if (segments.count == 0 && height > 0) {
+        // tabletop / tent 的横向 division 可能占满整行；浮层改在二维可用区中选择上方或下方，
+        // 不能沿用纯水平算法塌成 0 宽。
+        frame = ZXNavigationBarFitHorizontalFrame(preferredFrame, @[[NSValue valueWithCGRect:safe]]);
+        NSArray<NSValue *> *verticalSegments = ZXNavigationBarAvailableVerticalSegments(
+            safe,
+            UIEdgeInsetsZero,
+            reservedFrames
+        );
+        CGFloat minimumUsableHeight = MIN(ZXNavHistoryStackCellHeight, height);
+        NSMutableArray<NSValue *> *usableSegments = [NSMutableArray array];
+        for (NSValue *value in verticalSegments) {
+            if (CGRectGetHeight(value.CGRectValue) >= minimumUsableHeight) {
+                [usableSegments addObject:value];
+            }
+        }
+        frame = ZXNavigationBarFitVerticalFrame(frame, usableSegments.count > 0 ? usableSegments : verticalSegments);
+    }
     if (isHide) {
-        frame = CGRectMake(MIN(x + 20, CGRectGetMaxX(safe)), MIN(y + ZXNavHistoryStackCellHeight / 2, CGRectGetMaxY(safe)), 0, 0);
+        frame = CGRectMake(MIN(CGRectGetMinX(frame) + 20, CGRectGetMaxX(frame)),
+                           MIN(y + ZXNavHistoryStackCellHeight / 2, CGRectGetMaxY(safe)), 0, 0);
     }
     if (!CGSizeEqualToSize(frame.size, self.zx_historyStackView.frame.size)) {
         [self.zx_historyStackView.collectionViewLayout invalidateLayout];

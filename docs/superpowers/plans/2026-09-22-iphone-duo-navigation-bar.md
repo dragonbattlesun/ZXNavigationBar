@@ -151,7 +151,7 @@
   #endif
   ```
 
-  `ZXNavigationBarStatusBarHeightForView` 的顺序为当前 `windowScene.statusBarManager`、当前 view safe-area top、仅用于未入窗/旧系统的 legacy status bar frame；不得查找其他 scene/window。
+  > 本段最初拟使用 `windowScene.statusBarManager`，已被 Task 7.1 的真实嵌套容器验证取代：最终实现只采用传入 View 的局部 `safeAreaInsets.top`，避免已经位于安全区内的导航容器重复增高。
 
 - [ ] **Step 5：同步 Demo 镜像并运行 GREEN**
 
@@ -680,6 +680,8 @@
   ```bash
   env -u XNAV_ALLOW_SCENE_ORIENTATION_FALLBACK \
     -u TEST_RUNNER_XNAV_ALLOW_SCENE_ORIENTATION_FALLBACK \
+    -u XNAV_REQUIRE_ACTIVE_RESERVED_REGION \
+    -u TEST_RUNNER_XNAV_REQUIRE_ACTIVE_RESERVED_REGION \
   DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer xcodebuild \
     -project ZXNavigationBarDemo/ZXNavigationBarDemo.xcodeproj \
     -scheme ZXNavigationBarDemo \
@@ -713,27 +715,27 @@
 - Modify: `ZXNavigationBarDemo/ZXNavigationBarDemoTests/ZXNavigationBarGeometryTests.m`
 - Modify: `ZXNavigationBarDemo/ZXNavigationBarDemoUITests/ZXNavigationBarDemoUITests.m`
 
-- [ ] **Step 1：先增加局部顶部与历史浮层 RED**
+- [x] **Step 1：先增加局部顶部与历史浮层 RED**
 
   单元测试固定三条规则：尚未入窗的 View 返回 0；已位于状态栏下方的嵌套 View 使用自己的局部 `safeAreaInsets.top`，不复用 Scene 状态栏高度；历史浮层的首选 frame 跨越合成 division / occlusion 时必须收敛到锚点所在可用区段。先在旧实现运行，保存“未入窗仍回退进程级状态栏”或“嵌套 View 重复得到 Scene 状态栏高度”的首次失败。
 
-- [ ] **Step 2：最小修正局部顶部语义并同步镜像**
+- [x] **Step 2：最小修正局部顶部语义并同步镜像**
 
   `ZXNavigationBarStatusBarHeightForView` 只返回传入 View 的 `safeAreaInsets.top`；空 View、尚未入窗且 safe area 为零时返回 0。保留函数名维持源码兼容，但不得读取 `windowScene.statusBarManager` 或 `UIApplication.statusBarFrame`。默认导航高度继续等于“局部 top + 44pt”，不得把 active reserved region 的 `maxY` 扩散为整栏高度。
 
-  增加纯几何函数，把一个 preferred frame 放进最接近其锚点的可用水平区段；历史栈 cover 仍覆盖窗口，交互列表按自身 active reserved region 计算并收缩，旋转 / resize 后重新计算。
+  增加纯几何函数，把一个 preferred frame 放进最接近其锚点的可用水平区段；当 tabletop / tent 的横向 division 占满整行时，再计算上下两个垂直可用区段并选择能至少容纳一行历史项的最近区段，禁止交互列表退化为 0 宽。历史栈 cover 仍覆盖窗口，交互列表按自身 active reserved region 计算并收缩，旋转 / resize 后重新计算。
 
-- [ ] **Step 3：增加默认 Demo 真实业务 RED/GREEN**
+- [x] **Step 3：增加默认 Demo 真实业务 RED/GREEN**
 
-  默认启动后进入“ZXNavigationBar属性设置”，为首个背景色开关增加稳定 identifier 与英文辅助功能 label。iOS 27.1 Duo 测试读取页面实际 active reserved region，断言开关存在、enabled、hittable、frame 不相交；点击后开关状态与导航栏背景探针都改变。只把与 reserved region 相交的设置行 label + switch 局部移动到同一最大可用区段，行背景和分割线保持全宽，未相交行恢复原 15pt 边距。
+  默认启动后进入“ZXNavigationBar属性设置”，为全部业务开关增加稳定 identifier 与英文辅助功能 label。iOS 27.1 Duo 测试读取页面实际 active reserved region，断言开关存在、enabled、hittable、frame 不相交；点击后开关状态与导航栏背景探针都改变。Duo 定向命令同时显式传入 `XNAV_REQUIRE_ACTIVE_RESERVED_REGION=1` 与 `TEST_RUNNER_XNAV_REQUIRE_ACTIVE_RESERVED_REGION=1`，由独立门禁用例强制证明 `gate=1` 且 `reservedCount > 0`，避免无 region 时循环为空造成假通过；普通 iOS 17 命令必须显式移除这两个键。测试使用 `XCTAttachmentLifetimeKeepAlways` 保存属性页与微博真实入口截图。设置行承载于可滚动列表：纵向可滚动内容允许经过横向 division，用户可把任一业务开关滚出遮挡区域；对于垂直或角部 region，只把相交行的 label + switch 局部移动到同一最大可用水平区段，行背景和分割线保持全宽，未相交行恢复原 15pt 边距。透明几何探针只在显式 UI-test launch argument 下创建，不进入普通 Demo 的辅助功能树。
 
   默认启动后再进入“仿微博热搜页面导航栏”，记录首个 cell 和导航内容行几何，断言连续 Feed 没有因右侧局部状态区域整体增加 top inset。导航内容行高度固定验证为 44pt。
 
-- [ ] **Step 4：补旋转边界和 vertical bar 实际证据**
+- [x] **Step 4：补旋转边界和 vertical bar 实际证据**
 
-  在现有双向旋转断言中，每次 landscape 与恢复 portrait 后都显式验证导航容器、标题和五个动作 frame 位于 window/container 内。iOS 27.1 自定义栏与系统栏切换除 getter 字符串外，同时记录真实 safe area、导航栏 frame、window frame 与截图；`verticalBarEdge` 只作为 preferred edge 辅助证据，不能单独宣称最终系统轴已验证。
+  在现有双向旋转断言中，每次 landscape 与恢复 portrait 后都显式验证导航容器、导航栏、标题和四个动作 frame 位于 window/container 内且非折叠态为正尺寸。iOS 27.1 自定义栏与系统栏切换除 getter 字符串外，同时记录真实 safe area、横向导航栏 frame、实际系统 vertical bar frame、window frame 与截图；fixture 根控制器作为自定义容器，必须通过 `childViewControllerForPreferredVerticalBarBehavior` 把配置权转发给内嵌导航控制器，并在模式变化后请求 configuration update。Duo 定向命令必须传入 `XNAV_REQUIRE_VISIBLE_SYSTEM_VERTICAL_BAR=1` 和对应 `TEST_RUNNER_` 键，成对强制 custom 模式移除 trailing vertical-bar safe area，以及 system 模式横向栏收起、trailing safe-area inset 为正且 `BackButton` 位于实际系统竖栏。`verticalBarEdge` 只作为 preferred edge 辅助证据，不能单独宣称最终系统轴已验证。
 
-- [ ] **Step 5：运行定向回归、镜像审计并提交**
+- [x] **Step 5：运行定向回归、镜像审计并提交**
 
   两套 Xcode 命令都必须沿用隔离的 `OBJROOT`、`SYMROOT`、`DSTROOT` 与 `SHARED_PRECOMPS_DIR`。先跑全部 geometry tests、默认 Demo 两条业务流、history 与双向旋转测试，再执行生产 / Demo 镜像 `diff -u`。提交信息使用 `fix(iPhone Duo): 局部避让状态区和保留区域`。
 
@@ -763,6 +765,10 @@
   DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer xcrun simctl boot "$XNAV_SIM17_UDID" 2>/dev/null || true
   env -u XNAV_ALLOW_SCENE_ORIENTATION_FALLBACK \
     -u TEST_RUNNER_XNAV_ALLOW_SCENE_ORIENTATION_FALLBACK \
+    -u XNAV_REQUIRE_ACTIVE_RESERVED_REGION \
+    -u TEST_RUNNER_XNAV_REQUIRE_ACTIVE_RESERVED_REGION \
+    -u XNAV_REQUIRE_VISIBLE_SYSTEM_VERTICAL_BAR \
+    -u TEST_RUNNER_XNAV_REQUIRE_VISIBLE_SYSTEM_VERTICAL_BAR \
   DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer xcodebuild \
     -project ZXNavigationBarDemo/ZXNavigationBarDemo.xcodeproj \
     -scheme ZXNavigationBarDemo \
@@ -808,6 +814,10 @@
     CODE_SIGNING_ALLOWED=NO build
   XNAV_ALLOW_SCENE_ORIENTATION_FALLBACK=1 \
   TEST_RUNNER_XNAV_ALLOW_SCENE_ORIENTATION_FALLBACK=1 \
+  XNAV_REQUIRE_ACTIVE_RESERVED_REGION=1 \
+  TEST_RUNNER_XNAV_REQUIRE_ACTIVE_RESERVED_REGION=1 \
+  XNAV_REQUIRE_VISIBLE_SYSTEM_VERTICAL_BAR=1 \
+  TEST_RUNNER_XNAV_REQUIRE_VISIBLE_SYSTEM_VERTICAL_BAR=1 \
   DEVELOPER_DIR=/Applications/Xcode_beta.app/Contents/Developer xcodebuild \
     -project ZXNavigationBarDemo/ZXNavigationBarDemo.xcodeproj \
     -scheme ZXNavigationBarDemo \
