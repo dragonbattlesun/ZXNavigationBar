@@ -12,6 +12,7 @@
 
 - 规格单一事实源为 `docs/superpowers/specs/2026-09-22-iphone-duo-navigation-bar-design.md`；不得在实施中扩大为系统导航栏重写。
 - `ZXNavigationBar.podspec` 的 iOS 8.0 deployment target 保持不变；Demo target 保持现状。TalkMe 的 iOS 17.0 下游约束不反向抬高 Pod 最低版本。
+- 当前 Xcode 27.x 工具链只接受 iOS 15.0 及以上模拟器 deployment target；所有本计划 `xcodebuild` 验证命令显式传入 `IPHONEOS_DEPLOYMENT_TARGET=17.0`，该命令行覆盖不写回工程或 Pod 声明。
 - iOS 27.1 类型必须同时受 `defined(__IPHONE_27_1)`、`__IPHONE_OS_VERSION_MAX_ALLOWED >= __IPHONE_27_1` 和 `@available(iOS 27.1, *)` 保护，保证 Xcode 27.0 SDK 可编译。
 - 不删除现有公开宏或公开属性；新实现停止在目标路径中使用 `ZXScreenWidth`、`ZXMainWindow`、`ZXHorizontaledSafeArea`、`ZXAppStatusBarHeight` 和 `UIApplication.keyWindow`。
 - `ZXNavigationBar/` 是生产源码；`ZXNavigationBarDemo/ZXNavigationBarDemo/ZXNavigationBar/` 是 Demo 镜像。每个生产补丁完成后，同步同一逻辑到镜像，不覆盖 `ZXNavItemBtn.m` 与 `ZXNavigationBarTableViewController.m` 的历史差异。
@@ -114,6 +115,7 @@
     -derivedDataPath "$XNAV_DERIVED/stable" \
     -destination "platform=iOS Simulator,id=$XNAV_SIM17_UDID" \
     -only-testing:ZXNavigationBarDemoTests/ZXNavigationBarGeometryTests \
+    IPHONEOS_DEPLOYMENT_TARGET=17.0 \
     test
   ```
 
@@ -164,6 +166,7 @@
     -derivedDataPath "$XNAV_DERIVED/stable" \
     -destination "platform=iOS Simulator,id=$XNAV_SIM17_UDID" \
     -only-testing:ZXNavigationBarDemoTests/ZXNavigationBarGeometryTests \
+    IPHONEOS_DEPLOYMENT_TARGET=17.0 \
     test
   ```
 
@@ -253,6 +256,7 @@
     -derivedDataPath "$XNAV_DERIVED/stable" \
     -destination "platform=iOS Simulator,id=$XNAV_SIM17_UDID" \
     -only-testing:ZXNavigationBarDemoUITests/ZXNavigationBarDemoUITests/testAdaptiveFixtureLaunchesWithoutChangingDefaultDemo \
+    IPHONEOS_DEPLOYMENT_TARGET=17.0 \
     test
   git add ZXNavigationBarDemo/ZXNavigationBarDemo/Demo/DemoAdaptiveLayoutViewController \
     ZXNavigationBarDemo/ZXNavigationBarDemo/AppDelegate.m \
@@ -316,6 +320,7 @@
     -destination "platform=iOS Simulator,id=$XNAV_SIM17_UDID" \
     -only-testing:ZXNavigationBarDemoTests/ZXNavigationBarGeometryTests \
     -only-testing:ZXNavigationBarDemoUITests/ZXNavigationBarDemoUITests/testNestedResizeAndAsymmetricSafeArea \
+    IPHONEOS_DEPLOYMENT_TARGET=17.0 \
     test
   git add ZXNavigationBar/ZXNavigationBar.m \
     ZXNavigationBarDemo/ZXNavigationBarDemo/ZXNavigationBar/ZXNavigationBar.m \
@@ -418,6 +423,7 @@
     -only-testing:ZXNavigationBarDemoUITests/ZXNavigationBarDemoUITests/testResizeThenRotateAndRotateThenResizeHaveSameFinalGeometry \
     -only-testing:ZXNavigationBarDemoUITests/ZXNavigationBarDemoUITests/testTableControllerPreservesScrollStateAcrossRotation \
     -only-testing:ZXNavigationBarDemoUITests/ZXNavigationBarDemoUITests/testRotationDuringFoldPreservesTargetStateAndUpdatesWidth \
+    IPHONEOS_DEPLOYMENT_TARGET=17.0 \
     test
   git add ZXNavigationBar/ZXNavigationBarController.m ZXNavigationBar/ZXNavigationBarTableViewController.m \
     ZXNavigationBarDemo/ZXNavigationBarDemo/ZXNavigationBar/ZXNavigationBarController.m \
@@ -500,6 +506,7 @@
     -scheme ZXNavigationBarDemo \
     -derivedDataPath "$XNAV_DERIVED/xcode-27-0" \
     -destination 'generic/platform=iOS Simulator' \
+    IPHONEOS_DEPLOYMENT_TARGET=17.0 \
     CODE_SIGNING_ALLOWED=NO build
   DEVELOPER_DIR=/Applications/Xcode_beta.app/Contents/Developer xcodebuild \
     -project ZXNavigationBarDemo/ZXNavigationBarDemo.xcodeproj \
@@ -507,6 +514,7 @@
     -derivedDataPath "$XNAV_DERIVED/xcode-27-1" \
     -destination "platform=iOS Simulator,id=$XNAV_DUO_UDID" \
     -only-testing:ZXNavigationBarDemoUITests/ZXNavigationBarDemoUITests/testVerticalBarPolicyMatchesVisibleNavigationMode \
+    IPHONEOS_DEPLOYMENT_TARGET=17.0 \
     test
   ```
 
@@ -583,6 +591,7 @@
     -derivedDataPath "$XNAV_DERIVED/xcode-27-1" \
     -destination "platform=iOS Simulator,id=$XNAV_DUO_UDID" \
     -only-testing:ZXNavigationBarDemoUITests/ZXNavigationBarDemoUITests/testHistoryOverlayStaysInCurrentWindowAcrossRotationAndResize \
+    IPHONEOS_DEPLOYMENT_TARGET=17.0 \
     test
   git add ZXNavigationBar/ZXNavigationBarSubViews/ZXNavHistoryStackView/View/ZXNavHistoryStackContentView.h \
     ZXNavigationBar/ZXNavigationBarSubViews/ZXNavHistoryStackView/View/ZXNavHistoryStackContentView.m \
@@ -645,6 +654,7 @@
     -derivedDataPath "$XNAV_DERIVED/stable" \
     -destination "platform=iOS Simulator,id=$XNAV_SIM17_UDID" \
     -only-testing:ZXNavigationBarDemoUITests/ZXNavigationBarDemoUITests/testAccessibilitySemanticsRemainStableAfterResizeAndRotation \
+    IPHONEOS_DEPLOYMENT_TARGET=17.0 \
     test
   git add README.md ZXNavigationBarDemo/ZXNavigationBarDemoUITests/ZXNavigationBarDemoUITests.m
   git commit -m "test(无障碍): 固化旋转后的导航栏语义"
@@ -680,6 +690,7 @@
     -configuration Debug \
     -derivedDataPath "$XNAV_DERIVED/final-ios17" \
     -destination "platform=iOS Simulator,id=$XNAV_SIM17_UDID" \
+    IPHONEOS_DEPLOYMENT_TARGET=17.0 \
     test
   ```
 
@@ -694,6 +705,7 @@
     -configuration Release \
     -derivedDataPath "$XNAV_DERIVED/final-xcode-27-0" \
     -destination 'generic/platform=iOS Simulator' \
+    IPHONEOS_DEPLOYMENT_TARGET=17.0 \
     CODE_SIGNING_ALLOWED=NO build
   DEVELOPER_DIR=/Applications/Xcode_beta.app/Contents/Developer xcodebuild \
     -project ZXNavigationBarDemo/ZXNavigationBarDemo.xcodeproj \
@@ -701,12 +713,14 @@
     -configuration Release \
     -derivedDataPath "$XNAV_DERIVED/final-xcode-27-1" \
     -destination 'generic/platform=iOS Simulator' \
+    IPHONEOS_DEPLOYMENT_TARGET=17.0 \
     CODE_SIGNING_ALLOWED=NO build
   DEVELOPER_DIR=/Applications/Xcode_beta.app/Contents/Developer xcodebuild \
     -project ZXNavigationBarDemo/ZXNavigationBarDemo.xcodeproj \
     -scheme ZXNavigationBarDemo \
     -derivedDataPath "$XNAV_DERIVED/final-duo" \
     -destination "platform=iOS Simulator,id=$XNAV_DUO_UDID" \
+    IPHONEOS_DEPLOYMENT_TARGET=17.0 \
     test
   ```
 
