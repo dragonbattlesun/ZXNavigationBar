@@ -999,6 +999,8 @@ static ZXNavStatusBarStyle defaultNavStatusBarStyle = ZXNavStatusBarStyleDefault
 
 #pragma mark 显示历史堆栈
 -(void)zx_showNavHistoryStackView{
+    UIView *containerView = self.view.window;
+    if (!containerView) { return; }
     if(self.navigationController && self.zx_showNavHistoryStackContentView){
         if(self.zx_handlePopBlock && !self.zx_handlePopBlock(self,ZXNavPopBlockFromHistoryStack)){
             return;
@@ -1030,7 +1032,7 @@ static ZXNavStatusBarStyle defaultNavStatusBarStyle = ZXNavStatusBarStyleDefault
                 view.zx_historyStackArray = historyStackArray;
                 view.zx_historyStackViewLeft = self.zx_navLeftBtn.zx_x + self.zx_navHistoryStackContentViewOffsetX;
                 view.zx_historyStackViewStyle = self.zx_navHistoryStackViewStyle;
-                self.zx_navHistoryStackContentView = [view zx_show];
+                self.zx_navHistoryStackContentView = [view zx_showInContainerView:containerView anchorView:self.zx_navLeftBtn];
             }
         }
     }
@@ -1120,6 +1122,8 @@ static ZXNavStatusBarStyle defaultNavStatusBarStyle = ZXNavStatusBarStyleDefault
         return;
     }
     [self relayoutSubviews];
+    [self.zx_navBar layoutIfNeeded];
+    [self.zx_navHistoryStackContentView setNeedsLayout];
 }
 
 - (void)viewSafeAreaInsetsDidChange {

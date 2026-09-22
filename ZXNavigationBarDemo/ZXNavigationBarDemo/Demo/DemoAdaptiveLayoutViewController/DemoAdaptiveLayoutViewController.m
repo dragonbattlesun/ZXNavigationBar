@@ -9,6 +9,43 @@
 #import "ZXNavigationBarTableViewController.h"
 #import "ZXNavigationBarGeometry.h"
 
+static UIInterfaceOrientation DemoSceneOrientation(UIWindowScene *scene) {
+    if (@available(iOS 16.0, *)) { return scene.effectiveGeometry.interfaceOrientation; }
+    return scene.interfaceOrientation;
+}
+
+// 只观测真实浮层；读取辅助功能值时不触发布局、不创建或恢复历史视图。
+@interface DemoHistoryGeometryLabel : UILabel
+@property (weak, nonatomic) ZXNavHistoryStackContentView *overlay;
+@property (weak, nonatomic) UIWindow *container;
+@property (weak, nonatomic) UIView *anchor;
+@end
+@implementation DemoHistoryGeometryLabel
+- (NSString *)accessibilityValue {
+    ZXNavHistoryStackContentView *overlay = self.overlay;
+    UIView *cover = overlay.subviews.firstObject;
+    CGRect safe = UIEdgeInsetsInsetRect(overlay.bounds, overlay.safeAreaInsets);
+    NSArray *(^rect)(CGRect) = ^NSArray *(CGRect value) {
+        return @[@(value.origin.x), @(value.origin.y), @(value.size.width), @(value.size.height)];
+    };
+    NSDictionary *state = @{
+        @"overlay": [NSString stringWithFormat:@"%p", overlay],
+        @"list": [NSString stringWithFormat:@"%p", overlay.zx_historyStackView],
+        @"data": [NSString stringWithFormat:@"%p", overlay.zx_historyStackArray],
+        @"titles": [overlay.zx_historyStackArray valueForKey:@"title"] ?: @[],
+        @"attached": @(overlay.superview == self.container && overlay.window == self.container),
+        @"landscape": @(UIInterfaceOrientationIsLandscape(DemoSceneOrientation(self.container.windowScene))),
+        @"container": rect(self.container.bounds), @"bounds": rect(overlay.bounds),
+        @"cover": rect(cover.frame), @"safe": rect(safe),
+        @"frame": rect(overlay.zx_historyStackView.frame),
+        @"anchor": rect([self.anchor convertRect:self.anchor.bounds toView:overlay]),
+        @"backIdentifier": self.anchor.accessibilityIdentifier ?: @"",
+        @"backLabel": self.anchor.accessibilityLabel ?: @""
+    };
+    return [[NSString alloc] initWithData:[NSJSONSerialization dataWithJSONObject:state options:0 error:nil] encoding:NSUTF8StringEncoding];
+}
+@end
+
 // 在基类初始化前建立与 XIB 相同的 safe-area 顶部约束。
 @interface DemoAdaptiveContentController : ZXNavigationBarController
 @property (strong, nonatomic) NSLayoutConstraint *contentTopConstraint;
@@ -81,6 +118,8 @@
 @property (assign, nonatomic) CGFloat reverseFoldDistance;
 @property (assign, nonatomic) CGFloat reverseCompletionHeight;
 @property (assign, nonatomic) BOOL foldCallbacksOnMain;
+@property (assign, nonatomic) NSInteger rotationRequests;
+@property (copy, nonatomic) NSString *rotationRequestError;
 
 @end
 
@@ -143,9 +182,12 @@
     ZXNavigationBarController *currentViewController = [[DemoAdaptiveContentController alloc] init];
     currentViewController.zx_navTitle = @"Fixture Navigation";
     currentViewController.zx_showNavHistoryStackContentView = YES;
+    currentViewController.zx_navHistoryStackContentViewOffsetX = 13;
     self.currentViewController = currentViewController;
 
     ZXNavigationBarNavigationController *navigationController = [[ZXNavigationBarNavigationController alloc] initWithRootViewController:previousViewController];
+    [previousViewController loadViewIfNeeded];
+    previousViewController.zx_navTitle = @"Previous";
     [navigationController setViewControllers:@[previousViewController, currentViewController] animated:NO];
     self.fixtureNavigationController = navigationController;
 
@@ -187,7 +229,9 @@
     ]];
     UIStackView *regressionRow = [self rowWithViews:@[
         [self buttonWithTitle:@"Constraint block" identifier:@"fixture.constraintBlock" accessibilityLabel:@"Replace constraint block" action:@selector(replaceConstraintBlock:)],
-        [self buttonWithTitle:@"Reverse fold" identifier:@"fixture.reverseFold" accessibilityLabel:@"Reverse fold in final offset callback" action:@selector(reverseFold:)]
+        [self buttonWithTitle:@"Reverse fold" identifier:@"fixture.reverseFold" accessibilityLabel:@"Reverse fold in final offset callback" action:@selector(reverseFold:)],
+        [self buttonWithTitle:@"Landscape" identifier:@"fixture.rotation.landscape" accessibilityLabel:@"Request landscape scene" action:@selector(requestLandscape:)],
+        [self buttonWithTitle:@"Portrait" identifier:@"fixture.rotation.portrait" accessibilityLabel:@"Request portrait scene" action:@selector(requestPortrait:)]
     ]];
 
     self.verticalBehaviorLabel = [[UILabel alloc] init];
@@ -289,6 +333,65 @@
 
 - (void)showHistory:(UIButton *)sender {
     [self.currentViewController zx_showNavHistoryStackView];
+    ZXNavHistoryStackContentView *overlay = self.currentViewController.zx_navHistoryStackContentView;
+    if (overlay.superview) {
+        overlay.accessibilityIdentifier = @"fixture.history.overlay";
+        overlay.zx_historyStackView.accessibilityIdentifier = @"fixture.history.list";
+        DemoHistoryGeometryLabel *probe = [[DemoHistoryGeometryLabel alloc] initWithFrame:CGRectMake(16, CGRectGetHeight(overlay.bounds) - 140, 200, 24)];
+        probe.text = @"History geometry";
+        probe.accessibilityIdentifier = @"fixture.history.geometry";
+        probe.overlay = overlay;
+        probe.container = self.view.window;
+        probe.anchor = self.currentViewController.zx_navLeftBtn;
+        probe.autoresizingMask = UIViewAutoresizingFlexibleTopMargin;
+        [overlay addSubview:probe];
+        UIButton *resize = [self buttonWithTitle:@"Resize" identifier:@"fixture.history.resize" accessibilityLabel:@"Resize with history open" action:@selector(toggleContainerSize:)];
+        resize.frame = CGRectMake(16, CGRectGetHeight(overlay.bounds) - 100, 110, 44);
+        resize.autoresizingMask = UIViewAutoresizingFlexibleTopMargin;
+        [overlay addSubview:resize];
+        UIButton *landscape = [self buttonWithTitle:@"Landscape" identifier:@"fixture.history.rotation.landscape" accessibilityLabel:@"Request landscape scene" action:@selector(requestLandscape:)];
+        UIButton *portrait = [self buttonWithTitle:@"Portrait" identifier:@"fixture.history.rotation.portrait" accessibilityLabel:@"Request portrait scene" action:@selector(requestPortrait:)];
+        landscape.frame = CGRectMake(130, CGRectGetHeight(overlay.bounds) - 100, 110, 44);
+        portrait.frame = CGRectMake(244, CGRectGetHeight(overlay.bounds) - 100, 110, 44);
+        landscape.autoresizingMask = UIViewAutoresizingFlexibleTopMargin;
+        portrait.autoresizingMask = UIViewAutoresizingFlexibleTopMargin;
+        [overlay addSubview:landscape];
+        [overlay addSubview:portrait];
+    }
+    [self updateLayoutAfterFixtureAction];
+}
+
+- (void)requestLandscape:(UIButton *)sender {
+    [self requestSceneOrientation:UIInterfaceOrientationMaskLandscapeLeft];
+}
+
+- (void)requestPortrait:(UIButton *)sender {
+    [self requestSceneOrientation:UIInterfaceOrientationMaskPortrait];
+}
+
+- (void)requestSceneOrientation:(UIInterfaceOrientationMask)orientation {
+    self.rotationRequests += 1;
+    self.rotationRequestError = nil;
+#if defined(__IPHONE_16_0) && __IPHONE_OS_VERSION_MAX_ALLOWED >= __IPHONE_16_0
+    if (@available(iOS 16.0, *)) {
+        UIWindowScene *scene = self.view.window.windowScene;
+        if (!scene) {
+            self.rotationRequestError = @"Missing window scene";
+        } else {
+            [self setNeedsUpdateOfSupportedInterfaceOrientations];
+            __weak typeof(self) weakSelf = self;
+            [scene requestGeometryUpdateWithPreferences:[[UIWindowSceneGeometryPreferencesIOS alloc] initWithInterfaceOrientations:orientation] errorHandler:^(NSError *error) {
+                NSString *reason = [[error.localizedDescription stringByReplacingOccurrencesOfString:@";" withString:@","] stringByReplacingOccurrencesOfString:@"=" withString:@":"];
+                weakSelf.rotationRequestError = [NSString stringWithFormat:@"Rotation request failed (%@:%ld): %@", error.domain, (long)error.code, reason];
+                [weakSelf updateLayoutAfterFixtureAction];
+            }];
+        }
+    } else {
+        self.rotationRequestError = @"Scene rotation unavailable";
+    }
+#else
+    self.rotationRequestError = @"Scene rotation unavailable";
+#endif
     [self updateLayoutAfterFixtureAction];
 }
 
@@ -431,6 +534,13 @@
         self.foldReversed, (long)self.oldFoldCompletions, (long)self.newFoldCompletions, (long)self.reverseFoldOffsetCalls,
         self.reverseFoldDistance, self.reverseCompletionHeight, self.foldCallbacksOnMain];
     self.stateLabel.accessibilityValue = [self.stateLabel.accessibilityValue stringByAppendingString:regressionState];
+    UIWindow *window = self.view.window;
+    NSString *rotationState = [NSString stringWithFormat:@";sceneLandscape=%d;sceneOrientation=%ld;window={%.1f,%.1f,%.1f,%.1f};rotationRequests=%ld;rotationError=%@",
+        UIInterfaceOrientationIsLandscape(DemoSceneOrientation(window.windowScene)),
+        (long)DemoSceneOrientation(window.windowScene),
+        window.bounds.origin.x, window.bounds.origin.y, window.bounds.size.width, window.bounds.size.height,
+        (long)self.rotationRequests, self.rotationRequestError ?: @"none"];
+    self.stateLabel.accessibilityValue = [self.stateLabel.accessibilityValue stringByAppendingString:rotationState];
 }
 
 @end

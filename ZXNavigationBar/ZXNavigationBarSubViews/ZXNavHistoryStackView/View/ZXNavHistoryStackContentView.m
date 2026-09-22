@@ -14,11 +14,28 @@
 #import "UIView+ZXNavFrameExtension.h"
 
 #import <UIKit/UIFeedbackGenerator.h>
+#import <math.h>
 static NSString *historyStackViewCellReuseIdentifier = @"ZXNavHistoryStackCell";
+static BOOL ZXHistoryHasFiniteRect(CGRect rect) {
+    return isfinite(rect.origin.x) && isfinite(rect.origin.y) &&
+        isfinite(rect.size.width) && isfinite(rect.size.height) &&
+        rect.size.width >= 0 && rect.size.height >= 0;
+}
+static CGFloat ZXHistorySafeInset(CGFloat value, CGFloat available) {
+    return isfinite(value) ? MIN(MAX(0, value), available) : 0;
+}
+static UIWindow *ZXHistoryWindowForContainer(UIView *container) {
+    return [container isKindOfClass:UIWindow.class] ? (UIWindow *)container : container.window;
+}
 @interface ZXNavHistoryStackContentView()<UICollectionViewDelegate,UICollectionViewDataSource>
 @property (strong, nonatomic) UIView *coverView;
 @property (assign, nonatomic) BOOL isShowed;
 @property (strong, nonatomic) ZXNavHistoryStackModel *selectedHistoryStackModel;
+@property (weak, nonatomic) UIView *containerView;
+@property (weak, nonatomic) UIView *anchorView;
+@property (assign, nonatomic) CGFloat anchorOffsetX;
+@property (assign, nonatomic) CGRect lastAnchorRect;
+@property (assign, nonatomic) BOOL hasValidAnchorRect;
 @end
 @implementation ZXNavHistoryStackContentView
 
@@ -42,15 +59,14 @@ static NSString *historyStackViewCellReuseIdentifier = @"ZXNavHistoryStackCell";
     UITapGestureRecognizer *tapGestureRecognizer = [[UITapGestureRecognizer alloc]initWithTarget:self action:@selector(coverViewTouch)];
     [self.coverView addGestureRecognizer:panGestureRecognizer];
     [self.coverView addGestureRecognizer:tapGestureRecognizer];
-    
-    
-    [[NSNotificationCenter defaultCenter]addObserver:self selector:@selector(orientationDidChange:)name:UIDeviceOrientationDidChangeNotification object:nil];
 }
 
 - (void)layoutSubviews{
     [super layoutSubviews];
-    self.frame = [UIScreen mainScreen].bounds;
-    self.coverView.frame = self.frame;
+    if (self.containerView && self.superview == self.containerView && ZXHistoryHasFiniteRect(self.containerView.bounds)) {
+        self.frame = self.containerView.bounds;
+    }
+    self.coverView.frame = self.bounds;
     if(self.isShowed){
         [self updateHistoryStackViewFrameWithHide:NO];
     }
@@ -63,13 +79,41 @@ static NSString *historyStackViewCellReuseIdentifier = @"ZXNavHistoryStackCell";
 }
 
 - (instancetype)zx_show{
-    [ZXMainWindow addSubview:self];
+    // 旧入口不加载控制器的 view，也不访问进程级窗口。
+    for (ZXNavHistoryStackModel *model in self.zx_historyStackArray) {
+        UIViewController *controller = model.viewController;
+        if (controller.isViewLoaded && controller.view.window) {
+            return [self zx_showInContainerView:controller.view.window anchorView:nil];
+        }
+    }
+    return self;
+}
+
+- (instancetype)zx_showInContainerView:(UIView *)containerView anchorView:(UIView *)anchorView {
+    UIWindow *window = ZXHistoryWindowForContainer(containerView);
+    if (!window || containerView == self || [containerView isDescendantOfView:self] ||
+        !ZXHistoryHasFiniteRect(containerView.bounds)) { return self; }
+    CGRect anchorRect = CGRectZero;
+    if (anchorView) {
+        if (anchorView.window != window) { return self; }
+        anchorRect = [anchorView convertRect:anchorView.bounds toView:containerView];
+        if (!ZXHistoryHasFiniteRect(anchorRect) || !isfinite(anchorView.frame.origin.x)) { return self; }
+    }
+    self.containerView = containerView;
+    self.anchorView = anchorView;
+    // 旧 left 是按钮父视图坐标中的 x 加调用方 offset；只保存 offset，布局时重新转换真实锚点。
+    self.anchorOffsetX = anchorView ? self.zx_historyStackViewLeft - anchorView.frame.origin.x : 0;
+    if (!isfinite(self.anchorOffsetX)) { self.anchorOffsetX = 0; }
+    self.hasValidAnchorRect = NO;
+    self.frame = containerView.bounds;
+    self.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
+    [containerView addSubview:self];
+    self.coverView.frame = self.bounds;
     [self updateHistoryStackViewFrameWithHide:YES];
+    self.isShowed = YES;
     [UIView animateWithDuration:0.2 animations:^{
         self.coverView.backgroundColor = [UIColor colorWithWhite:0 alpha:0.05];
         [self updateHistoryStackViewFrameWithHide:NO];
-    }completion:^(BOOL finished) {
-        self.isShowed = YES;
     }];
     
     return self;
@@ -86,11 +130,38 @@ static NSString *historyStackViewCellReuseIdentifier = @"ZXNavHistoryStackCell";
 }
 
 - (void)updateHistoryStackViewFrameWithHide:(BOOL)isHide{
-    if(isHide){
-        self.zx_historyStackView.frame = CGRectMake(self.zx_historyStackViewLeft + 20, ZXAppStatusBarHeight + ZXNavHistoryStackCellHeight / 2, 0, 0);
-    }else{
-        self.zx_historyStackView.frame = CGRectMake(self.zx_historyStackViewLeft, ZXAppStatusBarHeight, ZXNavHistoryStackViewWidth, self.zx_historyStackArray.count * ZXNavHistoryStackCellHeight);
+    if (!ZXHistoryHasFiniteRect(self.bounds)) { return; }
+    UIEdgeInsets insets = self.safeAreaInsets;
+    CGFloat left = ZXHistorySafeInset(insets.left, self.bounds.size.width);
+    CGFloat right = ZXHistorySafeInset(insets.right, self.bounds.size.width - left);
+    CGFloat top = ZXHistorySafeInset(insets.top, self.bounds.size.height);
+    CGFloat bottom = ZXHistorySafeInset(insets.bottom, self.bounds.size.height - top);
+    CGRect safe = UIEdgeInsetsInsetRect(self.bounds, UIEdgeInsetsMake(top, left, bottom, right));
+    UIView *anchor = self.anchorView;
+    // 离窗、换窗或转场的非有限坐标只保留上次有效锚点，并继续按当前安全区钳制。
+    if (anchor.window && anchor.window == self.window && self.window == ZXHistoryWindowForContainer(self.containerView)) {
+        CGRect rect = [anchor convertRect:anchor.bounds toView:self];
+        if (ZXHistoryHasFiniteRect(rect)) {
+            self.lastAnchorRect = rect;
+            self.hasValidAnchorRect = YES;
+        }
     }
+    CGFloat width = MIN(ZXNavHistoryStackViewWidth, safe.size.width);
+    CGFloat x = self.hasValidAnchorRect ? self.lastAnchorRect.origin.x + self.anchorOffsetX : self.zx_historyStackViewLeft;
+    CGFloat y = self.hasValidAnchorRect ? self.lastAnchorRect.origin.y : CGRectGetMinY(safe);
+    if (!isfinite(x)) { x = CGRectGetMinX(safe); }
+    if (!isfinite(y)) { y = CGRectGetMinY(safe); }
+    x = MIN(MAX(x, CGRectGetMinX(safe)), CGRectGetMaxX(safe) - width);
+    y = MIN(MAX(y, CGRectGetMinY(safe)), CGRectGetMaxY(safe));
+    CGFloat height = MIN(self.zx_historyStackArray.count * ZXNavHistoryStackCellHeight, MAX(0, CGRectGetMaxY(safe) - y));
+    CGRect frame = CGRectMake(x, y, width, height);
+    if (isHide) {
+        frame = CGRectMake(MIN(x + 20, CGRectGetMaxX(safe)), MIN(y + ZXNavHistoryStackCellHeight / 2, CGRectGetMaxY(safe)), 0, 0);
+    }
+    if (!CGSizeEqualToSize(frame.size, self.zx_historyStackView.frame.size)) {
+        [self.zx_historyStackView.collectionViewLayout invalidateLayout];
+    }
+    self.zx_historyStackView.frame = frame;
 }
 
 #pragma mark - UICollectionViewDelegate
@@ -153,12 +224,6 @@ static NSString *historyStackViewCellReuseIdentifier = @"ZXNavHistoryStackCell";
     }
 }
 
-- (void)orientationDidChange:(NSNotification *)sender{
-    if(self.isShowed){
-        [self zx_hide];
-    }
-}
-
 #pragma mark - LazyLoad
 - (ZXNavHistoryStackView *)zx_historyStackView{
     if(!_zx_historyStackView){
@@ -206,10 +271,6 @@ static NSString *historyStackViewCellReuseIdentifier = @"ZXNavHistoryStackCell";
 - (void)setZx_historyStackViewLeft:(CGFloat)zx_historyStackViewLeft{
     _zx_historyStackViewLeft = zx_historyStackViewLeft;
     self.zx_historyStackView.zx_x = zx_historyStackViewLeft;
-}
-
-- (void)dealloc{
-    [[NSNotificationCenter defaultCenter]removeObserver:self];
 }
 
 @end
