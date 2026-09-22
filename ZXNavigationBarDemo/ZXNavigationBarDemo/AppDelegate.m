@@ -7,6 +7,7 @@
 //
 
 #import "AppDelegate.h"
+#import "DemoAdaptiveLayoutViewController.h"
 #import "DemoListViewController.h"
 #import "ZXNavigationBarNavigationController.h"
 @interface AppDelegate ()
@@ -18,9 +19,13 @@
 
 - (BOOL)application:(UIApplication *)application didFinishLaunchingWithOptions:(NSDictionary *)launchOptions {
     UIWindow *window = [[UIWindow alloc]initWithFrame:[UIScreen mainScreen].bounds];
-    DemoListViewController *vc = [[DemoListViewController alloc]init];
-    ZXNavigationBarNavigationController *nav = [[ZXNavigationBarNavigationController alloc]initWithRootViewController:vc];
-    window.rootViewController = nav;
+    if ([[NSProcessInfo processInfo].arguments containsObject:@"ZXNavigationBarAdaptiveLayoutUITests"]) {
+        window.rootViewController = [[DemoAdaptiveLayoutViewController alloc] init];
+    } else {
+        DemoListViewController *vc = [[DemoListViewController alloc]init];
+        ZXNavigationBarNavigationController *nav = [[ZXNavigationBarNavigationController alloc]initWithRootViewController:vc];
+        window.rootViewController = nav;
+    }
     [window makeKeyAndVisible];
     self.window = window;
     return YES;

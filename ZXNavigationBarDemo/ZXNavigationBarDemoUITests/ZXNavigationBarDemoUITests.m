@@ -15,24 +15,25 @@
 @implementation ZXNavigationBarDemoUITests
 
 - (void)setUp {
-    // Put setup code here. This method is called before the invocation of each test method in the class.
-
-    // In UI tests it is usually best to stop immediately when a failure occurs.
     self.continueAfterFailure = NO;
-
-    // UI tests must launch the application that they test. Doing this in setup will make sure it happens for each test method.
-    [[[XCUIApplication alloc] init] launch];
-
-    // In UI tests it’s important to set the initial state - such as interface orientation - required for your tests before they run. The setUp method is a good place to do this.
 }
 
-- (void)tearDown {
-    // Put teardown code here. This method is called after the invocation of each test method in the class.
+- (XCUIApplication *)launchAdaptiveFixture {
+    XCUIDevice.sharedDevice.orientation = UIDeviceOrientationPortrait;
+
+    XCUIApplication *app = [[XCUIApplication alloc] init];
+    app.launchArguments = @[@"ZXNavigationBarAdaptiveLayoutUITests"];
+    [app launch];
+
+    XCTAssertTrue([app.buttons[@"fixture.resize"] waitForExistenceWithTimeout:5]);
+    return app;
 }
 
-- (void)testExample {
-    // Use recording to get started writing UI tests.
-    // Use XCTAssert and related functions to verify your tests produce the correct results.
+- (void)testAdaptiveFixtureLaunchesWithoutChangingDefaultDemo {
+    XCUIApplication *app = [self launchAdaptiveFixture];
+
+    XCTAssertTrue(app.staticTexts[@"fixture.nav.title"].exists);
+    XCTAssertEqualObjects(app.buttons[@"fixture.nav.left"].label, @"Back");
 }
 
 @end
