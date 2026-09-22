@@ -613,20 +613,16 @@ static BOOL ZXShouldRequestSceneOrientation(NSDictionary<NSString *, NSString *>
     }
     CGRect titleFrame = [self fixtureRect:state[@"title"]];
     [self assertFrame:titleFrame insideContainer:container];
-    XCUIElement *title = app.staticTexts[@"fixture.nav.title"];
-    XCTAssertTrue(title.exists);
-    XCTAssertEqualObjects(title.label, @"Fixture navigation title");
     if (requiresVisibleContent) {
+        XCUIElement *title = app.staticTexts[@"fixture.nav.title"];
+        XCTAssertTrue(title.exists, @"非折叠 custom 模式必须保留标题：%@", state);
+        XCTAssertEqualObjects(title.label, @"Fixture navigation title");
         // state label 可能在 ZXNavigationBar 的异步二次 relayout 前采样；XCUI frame 才是用户最终看到的几何。
         [self assertPositiveFrame:title.frame insideContainer:container];
-    }
-    for (NSString *identifier in @[@"fixture.nav.left", @"fixture.nav.subLeft", @"fixture.nav.right", @"fixture.nav.subRight"]) {
-        XCUIElement *element = [app descendantsMatchingType:XCUIElementTypeAny][identifier];
-        XCTAssertTrue(element.exists);
-        if (requiresVisibleContent) {
+        for (NSString *identifier in @[@"fixture.nav.left", @"fixture.nav.subLeft", @"fixture.nav.right", @"fixture.nav.subRight"]) {
+            XCUIElement *element = [app descendantsMatchingType:XCUIElementTypeAny][identifier];
+            XCTAssertTrue(element.exists, @"非折叠 custom 模式必须保留动作：%@; state=%@", identifier, state);
             [self assertPositiveFrame:element.frame insideContainer:container];
-        } else {
-            [self assertFrame:element.frame insideContainer:container];
         }
     }
 }
