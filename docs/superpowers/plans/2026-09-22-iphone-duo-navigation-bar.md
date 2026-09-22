@@ -11,8 +11,8 @@
 ## Global Constraints
 
 - 规格单一事实源为 `docs/superpowers/specs/2026-09-22-iphone-duo-navigation-bar-design.md`；不得在实施中扩大为系统导航栏重写。
-- `ZXNavigationBar.podspec` 的 iOS 8.0 deployment target 保持不变；Demo target 保持现状。TalkMe 的 iOS 17.0 下游约束不反向抬高 Pod 最低版本。
-- 当前 Xcode 27.x 工具链只接受 iOS 15.0 及以上模拟器 deployment target；所有本计划 `xcodebuild` 验证命令显式传入 `IPHONEOS_DEPLOYMENT_TARGET=17.0`，该命令行覆盖不写回工程或 Pod 声明。
+- `ZXNavigationBar.podspec` 的 deployment target 调整为 iOS 16.0；Demo target 保持现状，TalkMe 下游仍以 iOS 17.0 验收。
+- 当前 Xcode 27.x 的 XCTest / XCUIAutomation 运行链以 iOS 17.0 为最低构建版本，因此 Demo 测试命令继续显式传入 `IPHONEOS_DEPLOYMENT_TARGET=17.0`；Pod 的 iOS 16.0 编译能力由 podspec lint / build 单独验证，不把测试框架限制写回 Pod 声明。
 - iOS 27.1 类型必须同时受 `defined(__IPHONE_27_1)`、`__IPHONE_OS_VERSION_MAX_ALLOWED >= __IPHONE_27_1` 和 `@available(iOS 27.1, *)` 保护，保证 Xcode 27.0 SDK 可编译。
 - 不删除现有公开宏或公开属性；新实现停止在目标路径中使用 `ZXScreenWidth`、`ZXMainWindow`、`ZXHorizontaledSafeArea`、`ZXAppStatusBarHeight` 和 `UIApplication.keyWindow`。
 - `ZXNavigationBar/` 是生产源码；`ZXNavigationBarDemo/ZXNavigationBarDemo/ZXNavigationBar/` 是 Demo 镜像。每个生产补丁完成后，同步同一逻辑到镜像，不覆盖 `ZXNavItemBtn.m` 与 `ZXNavigationBarTableViewController.m` 的历史差异。
@@ -270,7 +270,9 @@
 **Files:**
 
 - Modify: `ZXNavigationBar/ZXNavigationBar.m`
+- Modify: `ZXNavigationBar/ZXNavigationBarController.m`
 - Modify: `ZXNavigationBarDemo/ZXNavigationBarDemo/ZXNavigationBar/ZXNavigationBar.m`
+- Modify: `ZXNavigationBarDemo/ZXNavigationBarDemo/ZXNavigationBar/ZXNavigationBarController.m`
 - Modify: `ZXNavigationBarDemo/ZXNavigationBarDemoUITests/ZXNavigationBarDemoUITests.m`
 - Test: `ZXNavigationBarDemo/ZXNavigationBarDemoTests/ZXNavigationBarGeometryTests.m`
 
@@ -305,6 +307,8 @@
   - `zx_bacImageView.frame`、gradient layer、line 和 custom bar 全部使用 `self.bounds`，避免把父坐标中的 `self.frame` 当作子视图坐标。
   - 不改 subview 添加顺序、不重建按钮、不覆盖已有 accessibility 属性。
 
+  为闭合本任务的嵌套 resize 验收，把普通 `ZXNavigationBarController` 的最小默认宽度收敛从 Task 4 前移：默认候选 frame 的 width 使用当前 `self.view.bounds.size.width`，零 width 时保留上次有效 frame；`zx_navFixFrame` 与 `zx_navHandleFrameBlock` 的既有优先级不变。双向旋转、折叠动画、Table controller 与完整 UIKit 生命周期仍由 Task 4 完成。
+
 - [ ] **Step 3：补窄区段和标题扣除的纯几何测试**
 
   在单元测试中增加：主按钮优先时 secondary action 收缩为零、左右占用后标题选择最大剩余区段、标题无区段时返回 `CGRectZero`。若需要复用计算，只向 `ZXNavigationBarGeometry.h/.m` 增加无 UI 状态的矩形函数，不能把按钮对象传入几何层。
@@ -323,7 +327,9 @@
     IPHONEOS_DEPLOYMENT_TARGET=17.0 \
     test
   git add ZXNavigationBar/ZXNavigationBar.m \
+    ZXNavigationBar/ZXNavigationBarController.m \
     ZXNavigationBarDemo/ZXNavigationBarDemo/ZXNavigationBar/ZXNavigationBar.m \
+    ZXNavigationBarDemo/ZXNavigationBarDemo/ZXNavigationBar/ZXNavigationBarController.m \
     ZXNavigationBar/ZXNavigationBarGeometry.h ZXNavigationBar/ZXNavigationBarGeometry.m \
     ZXNavigationBarDemo/ZXNavigationBarDemo/ZXNavigationBar/ZXNavigationBarGeometry.h \
     ZXNavigationBarDemo/ZXNavigationBarDemo/ZXNavigationBar/ZXNavigationBarGeometry.m \
@@ -623,7 +629,7 @@
   - 无公开调用方式迁移；默认 frame 已改为当前控制器 bounds。
   - iOS 27.1 自定义栏使用 horizontal fallback，系统栏保持 automatic。
   - reserved region 在 27.1 SDK 生效，旧系统使用 safe area。
-  - Pod 最低版本仍为 iOS 8.0；建议 TalkMe 等下游以精确 commit 集成后自行完成业务页面验收。
+  - Pod 最低版本为 iOS 16.0；建议 TalkMe 等下游以精确 commit 集成后自行完成业务页面验收。
 
 - [ ] **Step 3：审计全局几何与镜像漂移**
 
@@ -740,7 +746,7 @@
   pod lib lint ZXNavigationBar.podspec --allow-warnings --verbose
   ```
 
-  预期：lint 通过且 deployment target 仍为 8.0。若 CocoaPods 网络/环境失败，保存首次错误；只能汇报“Demo 双工具链构建通过、Pod lint 环境阻塞”，不得声称 lint 通过。
+  预期：lint 通过且 deployment target 为 iOS 16.0。若 CocoaPods 网络/环境失败，保存首次错误；只能汇报“Demo 双工具链构建通过、Pod lint 环境阻塞”，不得声称 lint 通过。
 
 - [ ] **Step 7：绑定最终 SHA 并清理本任务资源**
 

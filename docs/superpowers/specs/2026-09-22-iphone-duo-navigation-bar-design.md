@@ -17,10 +17,10 @@ TalkMe 通过 CocoaPods 使用 `ZXNavigationBar`。当前库的自定义导航�
 1. 保留现有 ZX 自定义横向导航栏的视觉和公开使用方式，不在本次把整个库迁移到系统 `UINavigationBar`。
 2. iOS 27.1 中，只有正在显示 ZX 自定义栏的控制器明确返回 `UIVerticalBarBehaviorDisabled`；使用系统导航栏或没有 ZX 自定义栏时保持 `UIVerticalBarBehaviorAutomatic`。
 3. 旋转不是单独的设备方向分支，而是当前容器几何变化的一种。所有布局都以当前 View、WindowScene、safe area 和最终 `bounds` 为输入。
-4. XNavigationBar Pod 继续保留现有 iOS 8.0 deployment target；iOS 27.1 API 使用编译期与运行时可用性边界。TalkMe 下游验收按当前仓库规则以 iOS 17.0 为最低版本。
+4. XNavigationBar Pod 的 deployment target 调整为 iOS 16.0；iOS 27.1 API 使用编译期、运行时与动态能力边界。TalkMe 下游验收仍按当前仓库规则以 iOS 17.0 为最低版本。
 5. 本次不新增视觉尺寸、颜色、字体、图片或业务动作，只修复几何来源、系统竖向栏策略、旋转/resize 更新和历史浮层承载关系。
 
-TalkMePRD 当前 `origin/main` 的 iPhone Duo V1.1 草案仍保留早期 iOS 16.0 表述，与 TalkMeEnglish 当前 iOS 17.0 仓库规则不一致。该文档差异不阻塞本库保持 iOS 8.0 兼容的实现，但在 TalkMe 下游集成和最终验收前必须按当前规则修正文档，不能继续引用旧最低版本作为完成证据。
+TalkMePRD 当前 `origin/main` 的 iPhone Duo V1.1 草案仍保留 iOS 16.0 表述。该版本现与本 Pod 的库级最低版本一致，但仍低于 TalkMeEnglish 当前 iOS 17.0 App 规则；下游集成和最终验收必须继续以 TalkMe 仓库规则为准，不能用 Pod 的 iOS 16.0 声明替代 App 的 iOS 17.0 证据。
 
 ## 2. 目标与非目标
 
@@ -148,12 +148,11 @@ TalkMePRD 当前 `origin/main` 的 iPhone Duo V1.1 草案仍保留早期 iOS 16.
 
 ## 6. 兼容性与失败处理
 
-- iOS 8.0～16.x：沿用现有横向自定义栏，几何读取优先使用可用的 View / Window；低版本 fallback 保持可工作。
-- iOS 17.0～27.0：使用 Scene 范围几何，但不引用 iOS 27.1 竖向栏 API。
+- iOS 16.0～27.0：使用当前 View / WindowScene 范围几何与横向自定义栏，不引用 iOS 27.1 竖向栏 API。
 - iOS 27.1：自定义栏关闭系统竖向栏；系统栏保持 automatic。
 - iOS 27.1 reserved region 查询失败或尚未入窗：本轮使用当前 safe area，下一次有效布局自动重算；不跨 Scene 猜测 region。
 - Xcode 27.0 编译：iOS 27.1 类型和方法被预处理排除。
-- Xcode 27.1 编译：新 API 编译通过，旧 deployment target 不因此提高。
+- Xcode 27.1 编译：新 API 编译通过，Pod deployment target 保持 iOS 16.0。
 - 多 Scene：只使用当前控制器所在 window，不跨 Scene 回退到任意窗口。
 - 自定义 frame：调用方显式 frame/block 优先，库只负责在新的容器输入到来时再次调用既有 block。
 - 旋转中折叠动画：不取消业务回调、不重置目标折叠态；仅更新与高度无关的几何，结束后最终校正。
@@ -192,6 +191,7 @@ TalkMePRD 当前 `origin/main` 的 iPhone Duo V1.1 草案仍保留早期 iOS 16.
 
 - Xcode 27.1 / iOS 27.1 iPhone Duo：运行上述 UI 用例，并在 Device Hub 可用时补充外屏、内屏、book-folded、tabletop、tent、Split View 左右和旋转截图。
 - 当前稳定 Xcode 27.0：编译 Demo 和 Pod 源码，证明 iOS 27.1 符号被正确隔离。
+- Pod iOS 16.0：通过 podspec lint / build 验证库源码的 deployment target；不把 Xcode 27 的 XCTest/XCUIAutomation iOS 17.0 最低构建版本误算为 Pod 限制。
 - iOS 17.0 Simulator：运行代表性 portrait / landscape / resize 回归，证明旧系统横向栏可工作。
 - CocoaPods：执行本地 podspec lint / build；若网络或 CocoaPods 环境阻塞，保留原始失败并以 Demo 双工具链构建作为有限证据，不能声称 lint 通过。
 
@@ -223,6 +223,6 @@ TalkMePRD 当前 `origin/main` 的 iPhone Duo V1.1 草案仍保留早期 iOS 16.
 - portrait / landscape 双向旋转、嵌套容器、连续 resize、非对称 safe area 和 reserved-region 几何自动化通过。
 - 旋转与 resize 不改变导航栈、折叠目标状态、按钮动作或辅助功能语义。
 - 历史浮层绑定当前 scene/window，旋转后不消失、不越界、不跳到其他 Scene。
-- iOS 17.0 回归可工作；iOS 27.1 Duo 实际姿态有明确通过证据或诚实的环境阻塞记录。
+- Pod 以 iOS 16.0 deployment target 编译通过；iOS 17.0 回归可工作；iOS 27.1 Duo 实际姿态有明确通过证据或诚实的环境阻塞记录。
 - 生产源码与 Demo 副本的本次适配补丁一致，历史差异未被顺手改写。
 - 最终提交仅包含本任务文档、源码、Demo fixture / 测试及必要工程配置；工作树 clean，验证证据绑定最终 commit。
