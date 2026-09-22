@@ -628,14 +628,24 @@
 
 **Files:**
 
+- Modify: `ZXNavigationBar/ZXNavigationBar.m`
+- Modify: `ZXNavigationBarDemo/ZXNavigationBarDemo/ZXNavigationBar/ZXNavigationBar.m`
+- Modify: `ZXNavigationBarDemo/ZXNavigationBarDemo/Demo/DemoAdaptiveLayoutViewController/DemoAdaptiveLayoutViewController.m`
+- Modify: `ZXNavigationBarDemo/ZXNavigationBarDemoTests/ZXNavigationBarGeometryTests.m`
 - Modify: `ZXNavigationBarDemo/ZXNavigationBarDemoUITests/ZXNavigationBarDemoUITests.m`
 - Modify: `README.md`
 
-- [ ] **Step 1：增加语义稳定性测试**
+- [ ] **Step 1：先修正审计发现的跨 Scene 背景写入**
 
-  新增 `testAccessibilitySemanticsRemainStableAfterResizeAndRotation`。在 portrait 记录五个关键元素的 identifier、English label、enabled；resize、landscape、portrait 后逐一比较。再按最终 frame 的物理 x 验证 leading actions 在 title 前、trailing actions在 title 后；不以重建 accessibility element 的方式制造通过。
+  在 `ZXNavigationBarGeometryTests.m` 增加 owning window 回归：把导航栏挂到独立 `UIWindow`，启用 `zx_navEnableSmoothFromSystemNavBar` 后设置背景色，断言只更新该导航栏的 `self.window.backgroundColor`。旧实现通过 `UIApplication.keyWindow` 写入任意 Scene，测试必须先 RED；随后生产和 Demo 镜像都改为 `self.window.backgroundColor`，导航栏尚未入窗时安全无操作。
 
-- [ ] **Step 2：更新 README 兼容性说明**
+- [ ] **Step 2：增加语义稳定性测试**
+
+  新增 `testAccessibilitySemanticsRemainStableAfterResizeAndRotation`。在 portrait 记录五个关键元素的 identifier、English label、enabled；resize、landscape、portrait 后逐一比较。再按最终 frame 的物理 x 验证 leading actions 在 title 前、trailing actions在 title 后；不以 fixture state 或重建 accessibility element 代替真实 AX 树。
+
+  现有 fixture 在 iPhone 15 portrait 把 80% 容器再减 60pt，导致 254pt 宽度下标题为零宽并从真实 AX 树消失。仅调整测试 fixture：常规容器使用当前 view 宽度的 90%，compact 使用 80%，同时保持 leading 从 24pt 移到 56pt；两种状态均不得越界，resize 仍真实改变 origin 与宽度，不修改生产按钮尺寸或语义。
+
+- [ ] **Step 3：更新 README 兼容性说明**
 
   增加 “iPhone Duo、旋转与多窗口” 小节，明确：
 
@@ -644,7 +654,7 @@
   - reserved region 在 27.1 SDK 生效，旧系统使用 safe area。
   - Pod 最低版本为 iOS 16.0；建议 TalkMe 等下游以精确 commit 集成后自行完成业务页面验收。
 
-- [ ] **Step 3：审计全局几何与镜像漂移**
+- [ ] **Step 4：审计全局几何与镜像漂移**
 
   ```bash
   rg -n 'ZXScreenWidth|ZXMainWindow|ZXHorizontaledSafeArea|ZXAppStatusBarHeight|\[UIScreen mainScreen\]|keyWindow' \
@@ -664,7 +674,7 @@
 
   预期：`rg` 无匹配；前六个 `diff` 无输出；`ZXNavItemBtn.m` 相对基线无本任务改动；最后一个 Table diff 只保留实施前已知 scroll 历史差异和路径一致的本任务上下文，不出现新的单边 Duo 逻辑。
 
-- [ ] **Step 4：运行辅助功能测试并提交**
+- [ ] **Step 5：运行回归并提交**
 
   ```bash
   env -u XNAV_ALLOW_SCENE_ORIENTATION_FALLBACK \
@@ -674,10 +684,17 @@
     -scheme ZXNavigationBarDemo \
     -derivedDataPath "$XNAV_DERIVED/stable" \
     -destination "platform=iOS Simulator,id=$XNAV_SIM17_UDID" \
+    -only-testing:ZXNavigationBarDemoTests/ZXNavigationBarGeometryTests/testSmoothBackgroundUsesOwningWindowOnly \
     -only-testing:ZXNavigationBarDemoUITests/ZXNavigationBarDemoUITests/testAccessibilitySemanticsRemainStableAfterResizeAndRotation \
     IPHONEOS_DEPLOYMENT_TARGET=17.0 \
     test
-  git add README.md ZXNavigationBarDemo/ZXNavigationBarDemoUITests/ZXNavigationBarDemoUITests.m
+  git add ZXNavigationBar/ZXNavigationBar.m \
+    ZXNavigationBarDemo/ZXNavigationBarDemo/ZXNavigationBar/ZXNavigationBar.m \
+    ZXNavigationBarDemo/ZXNavigationBarDemoTests/ZXNavigationBarGeometryTests.m
+  git commit -m "fix(多窗口): 将平滑背景绑定当前窗口"
+  git add README.md \
+    ZXNavigationBarDemo/ZXNavigationBarDemo/Demo/DemoAdaptiveLayoutViewController/DemoAdaptiveLayoutViewController.m \
+    ZXNavigationBarDemo/ZXNavigationBarDemoUITests/ZXNavigationBarDemoUITests.m
   git commit -m "test(无障碍): 固化旋转后的导航栏语义"
   ```
 

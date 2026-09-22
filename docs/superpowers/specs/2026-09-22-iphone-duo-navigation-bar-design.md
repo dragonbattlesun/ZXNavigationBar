@@ -154,7 +154,7 @@ TalkMePRD 当前 `origin/main` 的 iPhone Duo V1.1 草案仍保留 iOS 16.0 表�
 - Xcode 27.0 编译：iOS 27.1 类型和方法被预处理排除。
 - Xcode 27.1 编译：新 API 编译通过，Pod deployment target 保持 iOS 16.0。
 - iOS 27 / 最新 SDK 启动：Apple 官方 TN3187 明确要求采用 UIKit scene-based lifecycle，否则 App 无法启动。Demo 使用单 `UIWindowScene` 的最小迁移，程序化 root 在 `scene:willConnectToSession:options:` 中创建；旧生命周期入口仅保留为旧系统回退，不扩展为多 Scene 业务改造。
-- 多 Scene：只使用当前控制器所在 window，不跨 Scene 回退到任意窗口。
+- 多 Scene：只使用当前控制器所在 window，不跨 Scene 回退到任意窗口；平滑系统导航栏过渡所需的 window 背景色也只更新导航栏实际所属的 `self.window`。
 - 自定义 frame：调用方显式 frame/block 优先，库只负责在新的容器输入到来时再次调用既有 block。
 - 旋转中折叠动画：不取消业务回调、不重置目标折叠态；仅更新与高度无关的几何，结束后最终校正。
 
