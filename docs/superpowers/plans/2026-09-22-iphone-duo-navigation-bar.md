@@ -18,7 +18,7 @@
 - `ZXNavigationBar/` 是生产源码；`ZXNavigationBarDemo/ZXNavigationBarDemo/ZXNavigationBar/` 是 Demo 镜像。每个生产补丁完成后，同步同一逻辑到镜像，不覆盖 `ZXNavItemBtn.m` 与 `ZXNavigationBarTableViewController.m` 的历史差异。
 - 所有 UI 测试辅助功能文案使用英文；identifier 稳定且不参与多语言。
 - 每个行为先写失败测试并保存首次失败摘要，再写最小实现；每个任务绿灯后独立提交。不得 push、merge、tag 或发布 Pod。
-- 构建产物放到 `${TMPDIR%/}/ZXNavigationBar-workflow-iphone-duo-adaptation`，不污染仓库；测试设备按本分支创建，不复用其他 worktree 的专属模拟器。
+- 构建产物放到 `${TMPDIR%/}/ZXNavigationBar-workflow-iphone-duo-adaptation`，不污染仓库；测试设备按本分支创建，不复用其他 worktree 的专属模拟器。由于本机 Xcode 使用 Custom/Absolute build location，本计划每条普通 `build` / `test` 命令除 `-derivedDataPath "$BUILD_ROOT"` 外，还必须传入 `OBJROOT="$BUILD_ROOT/Build/Intermediates.noindex"`、`SYMROOT="$BUILD_ROOT/Build/Products"`、`DSTROOT="$BUILD_ROOT/Dst"` 与 `SHARED_PRECOMPS_DIR="$BUILD_ROOT/Build/Intermediates.noindex/PrecompiledHeaders"`；其中 `BUILD_ROOT` 等于该命令原本的 DerivedData 路径。执行前以同配置 `-showBuildSettings` 确认展开路径不落入 `/Volumes/T7-APFS/Xcode/DerivedData`，验证报告再核对实际编译、链接与签名路径。不得修改用户级 Xcode 偏好。
 
 ---
 
