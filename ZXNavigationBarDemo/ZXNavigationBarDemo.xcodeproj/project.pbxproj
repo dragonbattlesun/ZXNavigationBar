@@ -56,6 +56,13 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
+		A10000000000000000000014 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 74BC1ADD241362C10032A424 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 74BC1AE4241362C10032A424;
+			remoteInfo = ZXNavigationBarDemo;
+		};
 		74BC1AFE241362C60032A424 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = 74BC1ADD241362C10032A424 /* Project object */;
@@ -522,6 +529,7 @@
 			buildRules = (
 			);
 			dependencies = (
+				A10000000000000000000015 /* PBXTargetDependency */,
 			);
 			name = ZXNavigationBarDemoTests;
 			productName = ZXNavigationBarDemoTests;
@@ -546,6 +554,7 @@
 					};
 					A10000000000000000000001 = {
 						CreatedOnToolsVersion = 27.0;
+						TestTargetID = 74BC1AE4241362C10032A424;
 					};
 				};
 			};
@@ -664,6 +673,11 @@
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
+		A10000000000000000000015 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 74BC1AE4241362C10032A424 /* ZXNavigationBarDemo */;
+			targetProxy = A10000000000000000000014 /* PBXContainerItemProxy */;
+		};
 		74BC1AFF241362C60032A424 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
 			target = 74BC1AE4241362C10032A424 /* ZXNavigationBarDemo */;
@@ -870,6 +884,7 @@
 		A10000000000000000000007 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
 				CLANG_ENABLE_MODULES = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				HEADER_SEARCH_PATHS = "$(PROJECT_DIR)/../ZXNavigationBar";
@@ -877,12 +892,14 @@
 				PRODUCT_BUNDLE_IDENTIFIER = cn.zxlee.ZXNavigationBarDemoTests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/ZXNavigationBarDemo.app/ZXNavigationBarDemo";
 			};
 			name = Debug;
 		};
 		A10000000000000000000008 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
 				CLANG_ENABLE_MODULES = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				HEADER_SEARCH_PATHS = "$(PROJECT_DIR)/../ZXNavigationBar";
@@ -890,6 +907,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = cn.zxlee.ZXNavigationBarDemoTests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/ZXNavigationBarDemo.app/ZXNavigationBarDemo";
 			};
 			name = Release;
 		};

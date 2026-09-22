@@ -1,4 +1,5 @@
 #import <XCTest/XCTest.h>
+#import "ZXNavigationBar.h"
 #import "ZXNavigationBarGeometry.h"
 
 FOUNDATION_EXPORT NSArray<NSValue *> *ZXNavigationBarGeometryFilterActiveReservedRegionFrames(NSArray *regions);
@@ -17,6 +18,54 @@ FOUNDATION_EXPORT NSArray<NSValue *> *ZXNavigationBarGeometryFilterActiveReserve
 @end
 
 @implementation ZXNavigationBarGeometryTests
+
+- (UIWindow *)keyWindowForHostedApplication {
+    for (UIScene *scene in UIApplication.sharedApplication.connectedScenes) {
+        if (![scene isKindOfClass:UIWindowScene.class]) {
+            continue;
+        }
+        for (UIWindow *window in ((UIWindowScene *)scene).windows) {
+            if (window.isKeyWindow) {
+                return window;
+            }
+        }
+    }
+    return nil;
+}
+
+- (void)testSmoothBackgroundUsesOwningWindowOnly {
+    UIWindow *hostWindow = [self keyWindowForHostedApplication];
+    XCTAssertNotNil(hostWindow);
+    if (!hostWindow) {
+        return;
+    }
+
+    UIColor *originalHostColor = hostWindow.backgroundColor;
+    UIColor *hostSentinelColor = UIColor.redColor;
+    UIColor *owningSentinelColor = UIColor.blueColor;
+    UIColor *targetColor = UIColor.greenColor;
+    hostWindow.backgroundColor = hostSentinelColor;
+
+    UIWindow *owningWindow = [[UIWindow alloc] initWithWindowScene:hostWindow.windowScene];
+    owningWindow.frame = CGRectMake(0, 0, 320, 100);
+    owningWindow.backgroundColor = owningSentinelColor;
+    ZXNavigationBar *navigationBar = [[ZXNavigationBar alloc] initWithFrame:owningWindow.bounds];
+    [owningWindow addSubview:navigationBar];
+    XCTAssertEqual(navigationBar.window, owningWindow);
+
+    [navigationBar setValue:@YES forKey:@"zx_navEnableSmoothFromSystemNavBar"];
+    navigationBar.backgroundColor = targetColor;
+
+    XCTAssertEqualObjects(owningWindow.backgroundColor, targetColor);
+    XCTAssertEqualObjects(hostWindow.backgroundColor, hostSentinelColor);
+
+    ZXNavigationBar *unattachedNavigationBar = [[ZXNavigationBar alloc] initWithFrame:CGRectMake(0, 0, 320, 100)];
+    [unattachedNavigationBar setValue:@YES forKey:@"zx_navEnableSmoothFromSystemNavBar"];
+    XCTAssertNoThrow(unattachedNavigationBar.backgroundColor = UIColor.orangeColor);
+    XCTAssertEqualObjects(hostWindow.backgroundColor, hostSentinelColor);
+
+    hostWindow.backgroundColor = originalHostColor;
+}
 
 - (void)testSafeAreaWithoutReservedRegionReturnsSingleSegment {
     CGRect content = CGRectMake(0, 20, 800, 44);

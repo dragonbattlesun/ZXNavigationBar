@@ -405,7 +405,7 @@
 - (void)setBackgroundColor:(UIColor *)backgroundColor{
     [super setBackgroundColor:backgroundColor];
     if(self.zx_navEnableSmoothFromSystemNavBar){
-        [UIApplication sharedApplication].keyWindow.backgroundColor = backgroundColor;
+        self.window.backgroundColor = backgroundColor;
     }
     CGFloat components[3];
     CGColorSpaceRef rgbColorSpace = CGColorSpaceCreateDeviceRGB();
