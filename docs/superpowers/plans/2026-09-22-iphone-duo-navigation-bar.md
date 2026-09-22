@@ -346,8 +346,6 @@
 - Modify: `ZXNavigationBar/ZXNavigationBarTableViewController.m`
 - Modify: `ZXNavigationBarDemo/ZXNavigationBarDemo/ZXNavigationBar/ZXNavigationBarController.m`
 - Modify: `ZXNavigationBarDemo/ZXNavigationBarDemo/ZXNavigationBar/ZXNavigationBarTableViewController.m`
-- Modify: `ZXNavigationBarDemo/ZXNavigationBarDemo/AppDelegate.m`
-- Modify: `ZXNavigationBarDemo/ZXNavigationBarDemo/Info.plist`
 - Modify: `ZXNavigationBarDemo/ZXNavigationBarDemo/Demo/DemoAdaptiveLayoutViewController/DemoAdaptiveLayoutViewController.m`
 - Modify: `ZXNavigationBarDemo/ZXNavigationBarDemoUITests/ZXNavigationBarDemoUITests.m`
 
@@ -449,6 +447,8 @@
 - Modify: `ZXNavigationBar/ZXNavigationBarTableViewController.m`
 - Modify: `ZXNavigationBarDemo/ZXNavigationBarDemo/ZXNavigationBar/ZXNavigationBarController.m`
 - Modify: `ZXNavigationBarDemo/ZXNavigationBarDemo/ZXNavigationBar/ZXNavigationBarTableViewController.m`
+- Modify: `ZXNavigationBarDemo/ZXNavigationBarDemo/AppDelegate.m`
+- Modify: `ZXNavigationBarDemo/ZXNavigationBarDemo/Info.plist`
 - Modify: `ZXNavigationBarDemo/ZXNavigationBarDemo/Demo/DemoAdaptiveLayoutViewController/DemoAdaptiveLayoutViewController.m`
 - Modify: `ZXNavigationBarDemo/ZXNavigationBarDemoUITests/ZXNavigationBarDemoUITests.m`
 
