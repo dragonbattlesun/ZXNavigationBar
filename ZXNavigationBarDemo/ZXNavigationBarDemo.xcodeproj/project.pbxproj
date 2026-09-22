@@ -20,6 +20,9 @@
 		74BC1AF5241362C50032A424 /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 74BC1AF3241362C50032A424 /* LaunchScreen.storyboard */; };
 		74BC1AF8241362C50032A424 /* main.m in Sources */ = {isa = PBXBuildFile; fileRef = 74BC1AF7241362C50032A424 /* main.m */; };
 		74BC1B02241362C60032A424 /* ZXNavigationBarDemoUITests.m in Sources */ = {isa = PBXBuildFile; fileRef = 74BC1B01241362C60032A424 /* ZXNavigationBarDemoUITests.m */; };
+		A10000000000000000000011 /* ZXNavigationBarGeometryTests.m in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000010 /* ZXNavigationBarGeometryTests.m */; };
+		A10000000000000000000012 /* ZXNavigationBarGeometry.m in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000000F /* ZXNavigationBarGeometry.m */; };
+		A10000000000000000000013 /* ZXNavigationBarGeometry.m in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000000E /* ZXNavigationBarGeometry.m */; };
 		74BC1B0F241364140032A424 /* ZXNavigationBar.m in Sources */ = {isa = PBXBuildFile; fileRef = 74BC1B0E241364140032A424 /* ZXNavigationBar.m */; };
 		74BC1B1424136C5C0032A424 /* ZXNavTitleLabel.m in Sources */ = {isa = PBXBuildFile; fileRef = 74BC1B1324136C5C0032A424 /* ZXNavTitleLabel.m */; };
 		74BC1B1724136C800032A424 /* ZXNavItemBtn.m in Sources */ = {isa = PBXBuildFile; fileRef = 74BC1B1624136C800032A424 /* ZXNavItemBtn.m */; };
@@ -87,6 +90,11 @@
 		74BC1AF7241362C50032A424 /* main.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = main.m; sourceTree = "<group>"; };
 		74BC1AFD241362C60032A424 /* ZXNavigationBarDemoUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = ZXNavigationBarDemoUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		74BC1B01241362C60032A424 /* ZXNavigationBarDemoUITests.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = ZXNavigationBarDemoUITests.m; sourceTree = "<group>"; };
+		A10000000000000000000002 /* ZXNavigationBarDemoTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = ZXNavigationBarDemoTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		A1000000000000000000000D /* ZXNavigationBarGeometry.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ZXNavigationBarGeometry.h; sourceTree = "<group>"; };
+		A1000000000000000000000E /* ZXNavigationBarGeometry.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = ZXNavigationBarGeometry.m; sourceTree = "<group>"; };
+		A1000000000000000000000F /* ZXNavigationBarGeometry.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; name = ZXNavigationBarGeometry.m; path = ../ZXNavigationBar/ZXNavigationBarGeometry.m; sourceTree = SOURCE_ROOT; };
+		A10000000000000000000010 /* ZXNavigationBarGeometryTests.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = ZXNavigationBarGeometryTests.m; sourceTree = "<group>"; };
 		74BC1B03241362C60032A424 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		74BC1B0D241364140032A424 /* ZXNavigationBar.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ZXNavigationBar.h; sourceTree = "<group>"; };
 		74BC1B0E241364140032A424 /* ZXNavigationBar.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = ZXNavigationBar.m; sourceTree = "<group>"; };
@@ -159,6 +167,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		A10000000000000000000005 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -206,6 +221,7 @@
 			isa = PBXGroup;
 			children = (
 				74BC1AE7241362C10032A424 /* ZXNavigationBarDemo */,
+				A10000000000000000000003 /* ZXNavigationBarDemoTests */,
 				74BC1B00241362C60032A424 /* ZXNavigationBarDemoUITests */,
 				74BC1AE6241362C10032A424 /* Products */,
 			);
@@ -215,6 +231,7 @@
 			isa = PBXGroup;
 			children = (
 				74BC1AE5241362C10032A424 /* ZXNavigationBarDemo.app */,
+				A10000000000000000000002 /* ZXNavigationBarDemoTests.xctest */,
 				74BC1AFD241362C60032A424 /* ZXNavigationBarDemoUITests.xctest */,
 			);
 			name = Products;
@@ -244,6 +261,15 @@
 			path = ZXNavigationBarDemoUITests;
 			sourceTree = "<group>";
 		};
+		A10000000000000000000003 /* ZXNavigationBarDemoTests */ = {
+			isa = PBXGroup;
+			children = (
+				A10000000000000000000010 /* ZXNavigationBarGeometryTests.m */,
+				A1000000000000000000000F /* ZXNavigationBarGeometry.m */,
+			);
+			path = ZXNavigationBarDemoTests;
+			sourceTree = "<group>";
+		};
 		74BC1B0C241362F40032A424 /* ZXNavigationBar */ = {
 			isa = PBXGroup;
 			children = (
@@ -251,6 +277,8 @@
 				74BC1B1124136BA20032A424 /* ZXNavigationBarSubViews */,
 				74BC1B0D241364140032A424 /* ZXNavigationBar.h */,
 				74BC1B0E241364140032A424 /* ZXNavigationBar.m */,
+				A1000000000000000000000D /* ZXNavigationBarGeometry.h */,
+				A1000000000000000000000E /* ZXNavigationBarGeometry.m */,
 				74BC1B2024138BCB0032A424 /* ZXNavigationBarController.h */,
 				74BC1B2124138BCB0032A424 /* ZXNavigationBarController.m */,
 				04D9C1B9259DD18300CB58DD /* ZXNavigationBarTableViewController.h */,
@@ -470,6 +498,23 @@
 			productReference = 74BC1AFD241362C60032A424 /* ZXNavigationBarDemoUITests.xctest */;
 			productType = "com.apple.product-type.bundle.ui-testing";
 		};
+		A10000000000000000000001 /* ZXNavigationBarDemoTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A10000000000000000000009 /* Build configuration list for PBXNativeTarget "ZXNavigationBarDemoTests" */;
+			buildPhases = (
+				A10000000000000000000004 /* Sources */,
+				A10000000000000000000005 /* Frameworks */,
+				A10000000000000000000006 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = ZXNavigationBarDemoTests;
+			productName = ZXNavigationBarDemoTests;
+			productReference = A10000000000000000000002 /* ZXNavigationBarDemoTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -485,6 +530,9 @@
 					74BC1AFC241362C60032A424 = {
 						CreatedOnToolsVersion = 10.2;
 						TestTargetID = 74BC1AE4241362C10032A424;
+					};
+					A10000000000000000000001 = {
+						CreatedOnToolsVersion = 27.0;
 					};
 				};
 			};
@@ -503,6 +551,7 @@
 			targets = (
 				74BC1AE4241362C10032A424 /* ZXNavigationBarDemo */,
 				74BC1AFC241362C60032A424 /* ZXNavigationBarDemoUITests */,
+				A10000000000000000000001 /* ZXNavigationBarDemoTests */,
 			);
 		};
 /* End PBXProject section */
@@ -529,6 +578,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		A10000000000000000000006 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
@@ -542,6 +598,7 @@
 				74A4B60B24D9716A00F7768A /* DemoPublicSystemBarViewController.m in Sources */,
 				74BC1B69241A23C00032A424 /* DemoCustomTitleView.m in Sources */,
 				74BC1B2224138BCB0032A424 /* ZXNavigationBarController.m in Sources */,
+				A10000000000000000000013 /* ZXNavigationBarGeometry.m in Sources */,
 				04C0586D2591A73700E98683 /* ZXNavHistoryStackContentView.m in Sources */,
 				74DAA1DF2480E50300EF7493 /* ZXNavigationBarNavigationController.m in Sources */,
 				74BC1B1424136C5C0032A424 /* ZXNavTitleLabel.m in Sources */,
@@ -578,6 +635,15 @@
 			buildActionMask = 2147483647;
 			files = (
 				74BC1B02241362C60032A424 /* ZXNavigationBarDemoUITests.m in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A10000000000000000000004 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A10000000000000000000011 /* ZXNavigationBarGeometryTests.m in Sources */,
+				A10000000000000000000012 /* ZXNavigationBarGeometry.m in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -787,6 +853,32 @@
 			};
 			name = Release;
 		};
+		A10000000000000000000007 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CLANG_ENABLE_MODULES = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				HEADER_SEARCH_PATHS = "$(PROJECT_DIR)/../ZXNavigationBar";
+				IPHONEOS_DEPLOYMENT_TARGET = 9.0;
+				PRODUCT_BUNDLE_IDENTIFIER = cn.zxlee.ZXNavigationBarDemoTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		A10000000000000000000008 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CLANG_ENABLE_MODULES = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				HEADER_SEARCH_PATHS = "$(PROJECT_DIR)/../ZXNavigationBar";
+				IPHONEOS_DEPLOYMENT_TARGET = 9.0;
+				PRODUCT_BUNDLE_IDENTIFIER = cn.zxlee.ZXNavigationBarDemoTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -813,6 +905,15 @@
 			buildConfigurations = (
 				74BC1B0A241362C60032A424 /* Debug */,
 				74BC1B0B241362C60032A424 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		A10000000000000000000009 /* Build configuration list for PBXNativeTarget "ZXNavigationBarDemoTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A10000000000000000000007 /* Debug */,
+				A10000000000000000000008 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
