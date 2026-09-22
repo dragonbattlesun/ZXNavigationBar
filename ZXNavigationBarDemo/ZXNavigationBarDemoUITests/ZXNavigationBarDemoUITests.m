@@ -95,10 +95,22 @@
     CGRect container = [self fixtureRect:state[@"container"]];
     CGRect navigation = [self fixtureRect:state[@"nav"]];
     XCTAssertEqualWithAccuracy(CGRectGetWidth(navigation), CGRectGetWidth(container), 0.5);
+    [self assertNavigationElements:app insideContainer:container state:state];
+}
+
+- (void)assertNavigationElements:(XCUIApplication *)app insideContainer:(CGRect)container state:(NSDictionary *)state {
     XCTAssertEqualObjects(state[@"titleIdentifier"], @"fixture.nav.title");
     XCTAssertEqualObjects(state[@"titleLabel"], @"Fixture navigation title");
     CGRect titleFrame = [self fixtureRect:state[@"title"]];
     [self assertFrame:titleFrame insideContainer:container];
+    XCUIElement *title = app.staticTexts[@"fixture.nav.title"];
+    if (titleFrame.size.width > 0) {
+        XCTAssertTrue(title.exists);
+        [self assertFrame:title.frame insideContainer:container];
+        XCTAssertEqualObjects(title.label, @"Fixture navigation title");
+    } else {
+        XCTAssertEqual(titleFrame.size.width, 0);
+    }
     for (NSString *identifier in @[@"fixture.nav.left", @"fixture.nav.subLeft", @"fixture.nav.right", @"fixture.nav.subRight"]) {
         XCUIElement *element = [app descendantsMatchingType:XCUIElementTypeAny][identifier];
         XCTAssertTrue(element.exists);
@@ -108,6 +120,7 @@
 
 - (void)assertFrame:(CGRect)frame insideContainer:(CGRect)container {
     XCTAssertGreaterThanOrEqual(CGRectGetWidth(frame), 0);
+    XCTAssertGreaterThanOrEqual(CGRectGetHeight(frame), 0);
     XCTAssertGreaterThanOrEqual(CGRectGetMinX(frame), CGRectGetMinX(container) - 0.5);
     XCTAssertLessThanOrEqual(CGRectGetMaxX(frame), CGRectGetMaxX(container) + 0.5);
     XCTAssertGreaterThanOrEqual(CGRectGetMinY(frame), CGRectGetMinY(container) - 0.5);
@@ -132,6 +145,7 @@
     CGRect nav = [self fixtureRect:state[@"nav"]];
     XCTAssertEqualWithAccuracy(nav.size.width, container.size.width, 0.5, @"%@", state);
     XCTAssertEqualWithAccuracy(nav.size.height, [state[@"status"] doubleValue] + 44, 0.5, @"%@", state);
+    [self assertNavigationElements:app insideContainer:container state:state];
     if (checkContent) {
         CGRect safe = [self fixtureRect:state[@"safe"]];
         XCTAssertEqualWithAccuracy([state[@"contentTop"] doubleValue], 12 + nav.size.height - safe.origin.x, 0.5, @"%@", state);
@@ -140,6 +154,7 @@
 
 - (void)testPortraitLandscapeAndPortraitConvergeToCurrentContainer {
     XCUIApplication *app = [self launchAdaptiveFixture];
+    [self assertCurrentGeometry:app checkContent:YES];
     [self rotate:UIDeviceOrientationLandscapeLeft app:app];
     [self assertCurrentGeometry:app checkContent:YES];
     [self rotate:UIDeviceOrientationPortrait app:app];
@@ -149,13 +164,18 @@
 
 - (void)testResizeThenRotateAndRotateThenResizeHaveSameFinalGeometry {
     XCUIApplication *app = [self launchAdaptiveFixture];
+    [self assertCurrentGeometry:app checkContent:YES];
     [self tapFixtureControl:@"fixture.resize" app:app];
+    [self assertCurrentGeometry:app checkContent:YES];
     [self rotate:UIDeviceOrientationLandscapeLeft app:app];
     NSDictionary *resizeThenRotate = [self fixtureState:app];
     [self assertCurrentGeometry:app checkContent:YES];
     [self rotate:UIDeviceOrientationPortrait app:app];
+    [self assertCurrentGeometry:app checkContent:YES];
     [self tapFixtureControl:@"fixture.resize" app:app];
+    [self assertCurrentGeometry:app checkContent:YES];
     [self rotate:UIDeviceOrientationLandscapeLeft app:app];
+    [self assertCurrentGeometry:app checkContent:YES];
     [self tapFixtureControl:@"fixture.resize" app:app];
     NSDictionary *rotateThenResize = [self fixtureState:app];
     for (NSString *key in @[@"container", @"nav", @"title", @"contentTop", @"stack"]) {
@@ -206,6 +226,66 @@
     XCTAssertEqualWithAccuracy(nav.size.height, [state[@"status"] doubleValue], 0.5);
     XCTAssertEqualObjects(state[@"folded"], @"1");
     XCTAssertEqualObjects(state[@"foldCompletions"], @"1");
+}
+
+- (void)assertConstraintBlockReplacementInTableMode:(BOOL)tableMode {
+    XCUIApplication *app = [self launchAdaptiveFixture];
+    if (tableMode) { [self tapFixtureControl:@"fixture.tableMode" app:app]; }
+    NSDictionary *initial = [self fixtureState:app];
+    CGFloat height = [self fixtureRect:initial[@"nav"]].size.height;
+    CGFloat safeTop = [self fixtureRect:initial[@"safe"]].origin.x;
+    for (NSNumber *addition in @[@7, @19]) {
+        NSInteger previousCalls = [self fixtureState:app][@"blockCalls"].integerValue;
+        [self tapFixtureControl:@"fixture.constraintBlock" app:app];
+        NSDictionary *state = [self fixtureState:app];
+        XCTAssertEqual([state[@"blockCalls"] integerValue], previousCalls + 1, @"%@", state);
+        XCTAssertEqualWithAccuracy([state[@"blockOriginal"] doubleValue], 12, 0.5);
+        XCTAssertEqualWithAccuracy([state[@"blockProposed"] doubleValue], 12 + height, 0.5);
+        XCTAssertEqualWithAccuracy([state[@"blockImmediate"] doubleValue], 12 + height + addition.doubleValue - safeTop, 0.5);
+        XCTAssertEqualWithAccuracy([state[@"contentTop"] doubleValue], 12 + height + addition.doubleValue - safeTop, 0.5);
+    }
+}
+
+- (void)testControllerConstraintBlockReplacementAfterInitialLayout {
+    [self assertConstraintBlockReplacementInTableMode:NO];
+}
+
+- (void)testTableConstraintBlockReplacementAfterInitialLayout {
+    [self assertConstraintBlockReplacementInTableMode:YES];
+}
+
+- (void)assertFinalOffsetCanReverseFoldInTableMode:(BOOL)tableMode {
+    XCUIApplication *app = [self launchAdaptiveFixture];
+    if (tableMode) { [self tapFixtureControl:@"fixture.tableMode" app:app]; }
+    [self tapFixtureControl:@"fixture.reverseFold" app:app];
+    NSPredicate *completed = [NSPredicate predicateWithBlock:^BOOL(id object, NSDictionary *bindings) {
+        return [self fixtureState:app][@"newCompletion"].integerValue == 1;
+    }];
+    [self expectationForPredicate:completed evaluatedWithObject:app handler:nil];
+    [self waitForExpectationsWithTimeout:10 handler:nil];
+    NSDictionary *state = [self fixtureState:app];
+    XCTAssertEqualObjects(state[@"reversed"], @"1");
+    XCTAssertEqualObjects(state[@"oldCompletion"], @"0");
+    XCTAssertEqualObjects(state[@"newCompletion"], @"1");
+    XCTAssertGreaterThan([state[@"reverseOffsets"] integerValue], 0, @"%@", state);
+    XCTAssertEqualWithAccuracy([state[@"reverseDistance"] doubleValue], 44, 0.5);
+    XCTAssertEqualWithAccuracy([state[@"reverseHeight"] doubleValue], [state[@"status"] doubleValue] + 44, 0.5);
+    XCTAssertEqualObjects(state[@"folded"], @"0");
+    XCTAssertEqualObjects(state[@"callbacksOnMain"], @"1");
+    [self assertCurrentGeometry:app checkContent:!tableMode];
+    [self tapFixtureControl:@"fixture.resize" app:app];
+    state = [self fixtureState:app];
+    XCTAssertEqualObjects(state[@"oldCompletion"], @"0");
+    XCTAssertEqualObjects(state[@"newCompletion"], @"1");
+    XCTAssertEqualObjects(state[@"folded"], @"0");
+}
+
+- (void)testControllerFinalOffsetCallbackCanReverseFold {
+    [self assertFinalOffsetCanReverseFoldInTableMode:NO];
+}
+
+- (void)testTableFinalOffsetCallbackCanReverseFold {
+    [self assertFinalOffsetCanReverseFoldInTableMode:YES];
 }
 
 @end

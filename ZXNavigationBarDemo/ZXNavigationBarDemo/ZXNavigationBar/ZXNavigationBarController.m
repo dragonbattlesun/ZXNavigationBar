@@ -21,6 +21,7 @@
 @end
 @interface ZXNavigationBarController ()<UIGestureRecognizerDelegate>
 @property(assign, nonatomic)BOOL setFold;
+@property(assign, nonatomic)NSUInteger foldGeneration;
 @property(assign, nonatomic)CGFloat lastConstraintOffset;
 @property(assign, nonatomic)CGFloat lastConstraintSafeTop;
 @property(assign, nonatomic)BOOL lastConstraintChecksSafeArea;
@@ -220,9 +221,16 @@ static ZXNavStatusBarStyle defaultNavStatusBarStyle = ZXNavStatusBarStyleDefault
 
 #pragma mark 折叠导航栏时更新导航栏高度
 - (void)updateNavFoldingFrame:(CADisplayLink *)displayLink{
+    if (displayLink != self.displayLink) {
+        return;
+    }
+    NSUInteger generation = self.foldGeneration;
+    BOOL folded = self.setFold;
+    foldingOffsetBlock offsetCallback = self.offsetBlock;
+    foldCompletionBlock completionCallback = self.completionBlock;
     CGFloat statusHeight = [self zx_currentStatusBarHeight];
     CGFloat fullHeight = [self getCurrentNavHeight];
-    CGFloat targetHeight = self.setFold ? statusHeight : fullHeight;
+    CGFloat targetHeight = folded ? statusHeight : fullHeight;
     if (!CGRectEqualToRect(self.zx_navFixFrame, CGRectZero)) {
         targetHeight = CGRectGetHeight(self.zx_navFixFrame);
     }
@@ -232,21 +240,33 @@ static ZXNavStatusBarStyle defaultNavStatusBarStyle = ZXNavStatusBarStyleDefault
         MAX(targetHeight, previousHeight - self.zx_navFoldingSpeed);
     self.zx_navBar.zx_height = nextHeight;
     [self relayoutSubviews];
+    // 布局 block 和位移回调都可能重入并替换当前动画事务。
+    if (generation != self.foldGeneration || displayLink != self.displayLink) {
+        return;
+    }
     CGFloat denominator = fullHeight - statusHeight;
-    CGFloat alpha = denominator > 0 ? (nextHeight - statusHeight) / denominator : (self.setFold ? 0 : 1);
+    CGFloat alpha = denominator > 0 ? (nextHeight - statusHeight) / denominator : (folded ? 0 : 1);
     [self setAlphaOfNavSubViews:MIN(1, MAX(0, alpha))];
-    if (self.offsetBlock && nextHeight != previousHeight) {
-        self.offsetBlock(nextHeight - previousHeight);
+    if (offsetCallback && nextHeight != previousHeight) {
+        offsetCallback(nextHeight - previousHeight);
+    }
+    if (generation != self.foldGeneration || displayLink != self.displayLink) {
+        return;
     }
     if (nextHeight == targetHeight) {
         self.isNavFoldAnimating = NO;
-        [self.displayLink invalidate];
+        [displayLink invalidate];
         self.displayLink = nil;
-        _zx_navIsFolded = self.setFold;
+        _zx_navIsFolded = folded;
+        self.offsetBlock = nil;
+        self.completionBlock = nil;
         [self relayoutSubviews];
-        [self setAlphaOfNavSubViews:self.setFold ? 0 : 1];
-        if (self.completionBlock) {
-            self.completionBlock();
+        if (generation != self.foldGeneration) {
+            return;
+        }
+        [self setAlphaOfNavSubViews:folded ? 0 : 1];
+        if (completionCallback) {
+            completionCallback();
         }
     }
 }
@@ -498,11 +518,12 @@ static ZXNavStatusBarStyle defaultNavStatusBarStyle = ZXNavStatusBarStyleDefault
 
 - (void)setZx_handleAdjustNavContainerOffsetBlock:(CGFloat (^)(CGFloat, CGFloat))zx_handleAdjustNavContainerOffsetBlock{
     _zx_handleAdjustNavContainerOffsetBlock = zx_handleAdjustNavContainerOffsetBlock;
-    if(zx_handleAdjustNavContainerOffsetBlock){
-        ZXXibTopConstraintModel *constraintModel = self.xibTopConstraintArr.firstObject;
-        if(constraintModel){
-            [self adjustNavContainerOffset:constraintModel.constraint.constant - constraintModel.orgOffset];
-        }
+    if (self.xibTopConstraintArr.count) {
+        // 使用上一轮未经 block 处理的输入；新 block 不能复用旧 block 的缓存结果。
+        CGFloat offset = self.lastConstraintOffset;
+        BOOL checkSafeArea = self.lastConstraintChecksSafeArea;
+        self.lastConstraintOffset = NAN;
+        [self adjustNavContainerOffset:offset checkSafeArea:checkSafeArea];
     }
 }
 
@@ -822,6 +843,8 @@ static ZXNavStatusBarStyle defaultNavStatusBarStyle = ZXNavStatusBarStyleDefault
 
 #pragma mark 设置导航栏折叠效果
 - (void)zx_setNavFolded:(BOOL)folded speed:(int)speed foldingOffsetBlock:(foldingOffsetBlock)offsetBlock foldCompletionBlock:(foldCompletionBlock)completionBlock{
+    // 每次公开请求都是新的事务，包含同方向请求对回调/速度的替换。
+    self.foldGeneration += 1;
     self.offsetBlock = offsetBlock;
     self.completionBlock = completionBlock;
     if(speed > 0 && speed < 6){

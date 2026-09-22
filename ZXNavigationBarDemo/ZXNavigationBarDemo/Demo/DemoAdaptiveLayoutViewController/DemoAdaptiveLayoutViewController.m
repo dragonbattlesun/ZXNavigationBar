@@ -27,8 +27,19 @@
 @end
 
 @interface DemoAdaptiveTableController : ZXNavigationBarTableViewController
+@property (strong, nonatomic) NSLayoutConstraint *contentTopConstraint;
 @end
 @implementation DemoAdaptiveTableController
+- (void)viewDidLoad {
+    UIView *content = [[UIView alloc] init];
+    content.translatesAutoresizingMaskIntoConstraints = NO;
+    [self.view addSubview:content];
+    self.contentTopConstraint = [content.topAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.topAnchor constant:12];
+    [NSLayoutConstraint activateConstraints:@[self.contentTopConstraint,
+        [content.leadingAnchor constraintEqualToAnchor:self.view.leadingAnchor],
+        [content.widthAnchor constraintEqualToConstant:1], [content.heightAnchor constraintEqualToConstant:1]]];
+    [super viewDidLoad];
+}
 - (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section { return 100; }
 - (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath {
     UITableViewCell *cell = [tableView dequeueReusableCellWithIdentifier:@"fixture.row"];
@@ -58,6 +69,18 @@
 @property (assign, nonatomic) NSInteger foldCompletions;
 @property (assign, nonatomic) NSInteger foldingRotationSamples;
 @property (assign, nonatomic) CGFloat foldingWidthError;
+@property (assign, nonatomic) NSInteger constraintBlockVersion;
+@property (assign, nonatomic) NSInteger constraintBlockCalls;
+@property (assign, nonatomic) CGFloat constraintOriginal;
+@property (assign, nonatomic) CGFloat constraintProposed;
+@property (assign, nonatomic) CGFloat constraintImmediateConstant;
+@property (assign, nonatomic) BOOL foldReversed;
+@property (assign, nonatomic) NSInteger oldFoldCompletions;
+@property (assign, nonatomic) NSInteger newFoldCompletions;
+@property (assign, nonatomic) NSInteger reverseFoldOffsetCalls;
+@property (assign, nonatomic) CGFloat reverseFoldDistance;
+@property (assign, nonatomic) CGFloat reverseCompletionHeight;
+@property (assign, nonatomic) BOOL foldCallbacksOnMain;
 
 @end
 
@@ -162,6 +185,10 @@
         [self buttonWithTitle:@"Scroll" identifier:@"fixture.scroll" accessibilityLabel:@"Scroll table" action:@selector(scrollTable:)],
         [self buttonWithTitle:@"Fold rotation" identifier:@"fixture.foldRotation" accessibilityLabel:@"Fold during next rotation" action:@selector(armFoldRotation:)]
     ]];
+    UIStackView *regressionRow = [self rowWithViews:@[
+        [self buttonWithTitle:@"Constraint block" identifier:@"fixture.constraintBlock" accessibilityLabel:@"Replace constraint block" action:@selector(replaceConstraintBlock:)],
+        [self buttonWithTitle:@"Reverse fold" identifier:@"fixture.reverseFold" accessibilityLabel:@"Reverse fold in final offset callback" action:@selector(reverseFold:)]
+    ]];
 
     self.verticalBehaviorLabel = [[UILabel alloc] init];
     self.verticalBehaviorLabel.text = @"Vertical bar behavior unavailable";
@@ -177,7 +204,7 @@
     self.stateLabel.accessibilityIdentifier = @"fixture.state";
     self.stateLabel.accessibilityLabel = @"Fixture state";
 
-    UIStackView *controls = [[UIStackView alloc] initWithArrangedSubviews:@[firstRow, secondRow, thirdRow, self.verticalBehaviorLabel, self.stateLabel]];
+    UIStackView *controls = [[UIStackView alloc] initWithArrangedSubviews:@[firstRow, secondRow, thirdRow, regressionRow, self.verticalBehaviorLabel, self.stateLabel]];
     controls.axis = UILayoutConstraintAxisVertical;
     controls.spacing = 8.0;
     controls.translatesAutoresizingMaskIntoConstraints = NO;
@@ -296,6 +323,54 @@
     [self updateLayoutAfterFixtureAction];
 }
 
+- (NSLayoutConstraint *)fixtureContentTopConstraint {
+    if (self.tableModeRequested) {
+        return ((DemoAdaptiveTableController *)(id)self.currentViewController).contentTopConstraint;
+    }
+    return ((DemoAdaptiveContentController *)self.currentViewController).contentTopConstraint;
+}
+
+- (void)replaceConstraintBlock:(UIButton *)sender {
+    self.constraintBlockVersion += 1;
+    CGFloat addition = self.constraintBlockVersion == 1 ? 7 : 19;
+    __weak typeof(self) weakSelf = self;
+    self.currentViewController.zx_handleAdjustNavContainerOffsetBlock = ^CGFloat(CGFloat original, CGFloat proposed) {
+        weakSelf.constraintBlockCalls += 1;
+        weakSelf.constraintOriginal = original;
+        weakSelf.constraintProposed = proposed;
+        return proposed + addition;
+    };
+    // 读取公开 setter 返回瞬间的真实约束，防止后续 layout 掩盖未立即执行的回归。
+    self.constraintImmediateConstant = self.fixtureContentTopConstraint.constant;
+    [self updateLayoutAfterFixtureAction];
+}
+
+- (void)reverseFold:(UIButton *)sender {
+    self.foldCallbacksOnMain = YES;
+    __weak typeof(self) weakSelf = self;
+    [self.currentViewController zx_setNavFolded:YES speed:3 foldingOffsetBlock:^(CGFloat offset) {
+        weakSelf.foldCallbacksOnMain &= NSThread.isMainThread;
+        CGFloat statusHeight = ZXNavigationBarStatusBarHeightForView(weakSelf.currentViewController.view);
+        if (!weakSelf.foldReversed && CGRectGetHeight(weakSelf.currentViewController.zx_navBar.frame) <= statusHeight) {
+            weakSelf.foldReversed = YES;
+            [weakSelf.currentViewController zx_setNavFolded:NO speed:3 foldingOffsetBlock:^(CGFloat reverseOffset) {
+                weakSelf.foldCallbacksOnMain &= NSThread.isMainThread;
+                weakSelf.reverseFoldOffsetCalls += 1;
+                weakSelf.reverseFoldDistance += reverseOffset;
+            } foldCompletionBlock:^{
+                weakSelf.foldCallbacksOnMain &= NSThread.isMainThread;
+                weakSelf.newFoldCompletions += 1;
+                weakSelf.reverseCompletionHeight = CGRectGetHeight(weakSelf.currentViewController.zx_navBar.frame);
+                [weakSelf updateLayoutAfterFixtureAction];
+            }];
+        }
+    } foldCompletionBlock:^{
+        weakSelf.oldFoldCompletions += 1;
+        [weakSelf updateLayoutAfterFixtureAction];
+    }];
+    [self updateLayoutAfterFixtureAction];
+}
+
 - (void)applyAdditionalSafeAreaInsets {
     self.currentViewController.additionalSafeAreaInsets = UIEdgeInsetsMake(0.0, self.leadingInset, 0.0, self.trailingInset);
 }
@@ -308,6 +383,7 @@
 }
 
 - (void)updateFixtureState {
+    [self.fixtureNavigationController.view layoutIfNeeded];
     [self.currentViewController.view layoutIfNeeded];
     [self.currentViewController.zx_navBar layoutIfNeeded];
     CGRect containerFrame = [self.fixtureNavigationController.view.superview convertRect:self.fixtureNavigationController.view.frame toView:self.view];
@@ -327,13 +403,18 @@
                             CGRectGetMinX(titleFrame), CGRectGetMinY(titleFrame), CGRectGetWidth(titleFrame), CGRectGetHeight(titleFrame),
                             titleLabel.accessibilityIdentifier, titleLabel.accessibilityLabel];
     self.stateLabel.accessibilityValue = self.stateLabel.text;
-    CGFloat topConstraint = [self.currentViewController isKindOfClass:DemoAdaptiveContentController.class] ? ((DemoAdaptiveContentController *)self.currentViewController).contentTopConstraint.constant : 0;
+    CGFloat topConstraint = self.fixtureContentTopConstraint.constant;
     UITableView *table = self.tableModeRequested ? [(DemoAdaptiveTableController *)(id)self.currentViewController tableView] : nil;
     NSString *details = [NSString stringWithFormat:@";status=%.1f;contentTop=%.1f;offset=%.1f;inset=%.1f;foldCompletions=%ld;foldSamples=%ld;foldWidthError=%.1f;landscape=%d;stack=%lu",
         ZXNavigationBarStatusBarHeightForView(self.currentViewController.view), topConstraint, table.contentOffset.y, table.contentInset.top,
         (long)self.foldCompletions, (long)self.foldingRotationSamples, self.foldingWidthError,
         CGRectGetWidth(self.view.bounds) > CGRectGetHeight(self.view.bounds), (unsigned long)self.fixtureNavigationController.viewControllers.count];
     self.stateLabel.accessibilityValue = [self.stateLabel.text stringByAppendingString:details];
+    NSString *regressionState = [NSString stringWithFormat:@";blockCalls=%ld;blockOriginal=%.1f;blockProposed=%.1f;blockImmediate=%.1f;reversed=%d;oldCompletion=%ld;newCompletion=%ld;reverseOffsets=%ld;reverseDistance=%.1f;reverseHeight=%.1f;callbacksOnMain=%d",
+        (long)self.constraintBlockCalls, self.constraintOriginal, self.constraintProposed, self.constraintImmediateConstant,
+        self.foldReversed, (long)self.oldFoldCompletions, (long)self.newFoldCompletions, (long)self.reverseFoldOffsetCalls,
+        self.reverseFoldDistance, self.reverseCompletionHeight, self.foldCallbacksOnMain];
+    self.stateLabel.accessibilityValue = [self.stateLabel.accessibilityValue stringByAppendingString:regressionState];
 }
 
 @end
