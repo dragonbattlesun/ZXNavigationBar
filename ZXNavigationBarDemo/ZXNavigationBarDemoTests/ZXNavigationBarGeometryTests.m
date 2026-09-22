@@ -1,6 +1,18 @@
 #import <XCTest/XCTest.h>
 #import "ZXNavigationBarGeometry.h"
 
+FOUNDATION_EXPORT NSArray<NSValue *> *ZXNavigationBarGeometryFilterActiveReservedRegionFrames(NSArray *regions);
+
+@interface ZXNavigationBarReservedRegionDouble : NSObject
+
+@property (nonatomic, assign) BOOL isActive;
+@property (nonatomic, assign) CGRect frame;
+
+@end
+
+@implementation ZXNavigationBarReservedRegionDouble
+@end
+
 @interface ZXNavigationBarGeometryTests : XCTestCase
 @end
 
@@ -14,6 +26,17 @@
 
     XCTAssertEqual(segments.count, 1U);
     [self assertRect:segments.firstObject.CGRectValue equals:CGRectMake(24, 20, 736, 44)];
+}
+
+- (void)testSafeAreaInsetsFallsBackToZeroWithoutSafeAreaCapability {
+    UIView *viewWithoutSafeAreaCapability = (UIView *)[NSObject new];
+    UIEdgeInsets insets = UIEdgeInsetsZero;
+
+    XCTAssertNoThrow(insets = ZXNavigationBarSafeAreaInsetsForView(viewWithoutSafeAreaCapability));
+    XCTAssertEqualWithAccuracy(insets.top, 0, 0.5);
+    XCTAssertEqualWithAccuracy(insets.left, 0, 0.5);
+    XCTAssertEqualWithAccuracy(insets.bottom, 0, 0.5);
+    XCTAssertEqualWithAccuracy(insets.right, 0, 0.5);
 }
 
 - (void)testMiddleDivisionSplitsContentIntoTwoSegments {
@@ -97,15 +120,26 @@
     [self assertRect:ZXNavigationBarLargestHorizontalSegment(segments) equals:CGRectZero];
 }
 
-#if defined(__IPHONE_27_1) && __IPHONE_OS_VERSION_MAX_ALLOWED >= __IPHONE_27_1
 - (void)testReservedRegionQueryDropsInactiveRegions {
-    UIView *view = [[UIView alloc] initWithFrame:CGRectZero];
+    ZXNavigationBarReservedRegionDouble *activeRegion = [ZXNavigationBarReservedRegionDouble new];
+    activeRegion.isActive = YES;
+    activeRegion.frame = CGRectMake(390, 0, 20, 100);
+    ZXNavigationBarReservedRegionDouble *inactiveRegion = [ZXNavigationBarReservedRegionDouble new];
+    inactiveRegion.isActive = NO;
+    inactiveRegion.frame = CGRectMake(410, 0, 20, 100);
+    ZXNavigationBarReservedRegionDouble *emptyActiveRegion = [ZXNavigationBarReservedRegionDouble new];
+    emptyActiveRegion.isActive = YES;
+    emptyActiveRegion.frame = CGRectZero;
 
-    NSArray<NSValue *> *frames = ZXNavigationBarActiveReservedRegionFramesForView(view);
+    NSArray<NSValue *> *frames = ZXNavigationBarGeometryFilterActiveReservedRegionFrames(@[
+        activeRegion,
+        inactiveRegion,
+        emptyActiveRegion
+    ]);
 
-    XCTAssertEqual(frames.count, 0U);
+    XCTAssertEqual(frames.count, 1U);
+    [self assertRect:frames.firstObject.CGRectValue equals:activeRegion.frame];
 }
-#endif
 
 - (void)assertRect:(CGRect)actual equals:(CGRect)expected {
     XCTAssertEqualWithAccuracy(actual.origin.x, expected.origin.x, 0.5);

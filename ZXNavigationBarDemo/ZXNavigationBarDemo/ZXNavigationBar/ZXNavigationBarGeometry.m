@@ -1,7 +1,33 @@
 #import "ZXNavigationBarGeometry.h"
+#import <objc/message.h>
+
+__attribute__((visibility("hidden")))
+NSArray<NSValue *> *ZXNavigationBarGeometryFilterActiveReservedRegionFrames(NSArray *regions) {
+    NSMutableArray<NSValue *> *frames = [NSMutableArray array];
+    for (id region in regions) {
+        if (![region respondsToSelector:@selector(isActive)] ||
+            ![region respondsToSelector:@selector(frame)]) {
+            continue;
+        }
+        BOOL active = ((BOOL (*)(id, SEL))objc_msgSend)(region, @selector(isActive));
+        CGRect frame = ((CGRect (*)(id, SEL))objc_msgSend)(region, @selector(frame));
+        if (active && !CGRectIsEmpty(frame)) {
+            [frames addObject:[NSValue valueWithCGRect:frame]];
+        }
+    }
+    return frames;
+}
 
 UIEdgeInsets ZXNavigationBarSafeAreaInsetsForView(UIView *view) {
-    return view ? view.safeAreaInsets : UIEdgeInsetsZero;
+    if (!view) {
+        return UIEdgeInsetsZero;
+    }
+    if (@available(iOS 11.0, *)) {
+        if ([view respondsToSelector:@selector(safeAreaInsets)]) {
+            return view.safeAreaInsets;
+        }
+    }
+    return UIEdgeInsetsZero;
 }
 
 CGFloat ZXNavigationBarStatusBarHeightForView(UIView *view) {
@@ -29,17 +55,22 @@ CGFloat ZXNavigationBarStatusBarHeightForView(UIView *view) {
 NSArray<NSValue *> *ZXNavigationBarActiveReservedRegionFramesForView(UIView *view) {
 #if defined(__IPHONE_27_1) && __IPHONE_OS_VERSION_MAX_ALLOWED >= __IPHONE_27_1
     if (@available(iOS 27.1, *)) {
+        SEL reservedRegionsSelector = @selector(reservedRegionsOfKind:);
+        SEL occlusionKindSelector = @selector(occlusionRegionKind);
+        SEL divisionKindSelector = @selector(divisionRegionKind);
+        Class kindClass = UIViewReservedRegionKind.class;
+        if (![view respondsToSelector:reservedRegionsSelector] ||
+            ![kindClass respondsToSelector:occlusionKindSelector] ||
+            ![kindClass respondsToSelector:divisionKindSelector]) {
+            return @[];
+        }
+
+        id occlusionKind = ((id (*)(id, SEL))objc_msgSend)(kindClass, occlusionKindSelector);
+        id divisionKind = ((id (*)(id, SEL))objc_msgSend)(kindClass, divisionKindSelector);
         NSMutableArray<NSValue *> *frames = [NSMutableArray array];
-        NSArray *kinds = @[
-            [UIViewReservedRegionKind occlusionRegionKind],
-            [UIViewReservedRegionKind divisionRegionKind]
-        ];
-        for (UIViewReservedRegionKind *kind in kinds) {
-            for (UIViewReservedRegion *region in [view reservedRegionsOfKind:kind]) {
-                if (region.isActive && !CGRectIsEmpty(region.frame)) {
-                    [frames addObject:[NSValue valueWithCGRect:region.frame]];
-                }
-            }
+        for (id kind in @[occlusionKind, divisionKind]) {
+            NSArray *regions = ((NSArray *(*)(id, SEL, id))objc_msgSend)(view, reservedRegionsSelector, kind);
+            [frames addObjectsFromArray:ZXNavigationBarGeometryFilterActiveReservedRegionFrames(regions)];
         }
         return frames;
     }
