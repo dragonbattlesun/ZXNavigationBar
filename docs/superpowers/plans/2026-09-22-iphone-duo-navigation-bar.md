@@ -602,6 +602,8 @@
 - [ ] **Step 4：同步、运行 GREEN 并提交**
 
   ```bash
+  XNAV_ALLOW_SCENE_ORIENTATION_FALLBACK=1 \
+  TEST_RUNNER_XNAV_ALLOW_SCENE_ORIENTATION_FALLBACK=1 \
   DEVELOPER_DIR=/Applications/Xcode_beta.app/Contents/Developer xcodebuild \
     -project ZXNavigationBarDemo/ZXNavigationBarDemo.xcodeproj \
     -scheme ZXNavigationBarDemo \
