@@ -141,7 +141,8 @@ static UIInterfaceOrientation DemoSceneOrientation(UIWindowScene *scene) {
 
 - (void)viewWillLayoutSubviews {
     [super viewWillLayoutSubviews];
-    self.containerWidthConstraint.constant = CGRectGetWidth(self.view.bounds) * 0.8 - (self.usesCompactContainer ? 60 : 0);
+    CGFloat widthMultiplier = self.usesCompactContainer ? 0.8 : 0.9;
+    self.containerWidthConstraint.constant = CGRectGetWidth(self.view.bounds) * widthMultiplier;
     self.containerHeightConstraint.constant = CGRectGetWidth(self.view.bounds) > CGRectGetHeight(self.view.bounds) ? 100 : 210;
 }
 
@@ -306,7 +307,8 @@ static UIInterfaceOrientation DemoSceneOrientation(UIWindowScene *scene) {
 - (void)toggleContainerSize:(UIButton *)sender {
     self.usesCompactContainer = !self.usesCompactContainer;
     self.containerLeadingConstraint.constant = self.usesCompactContainer ? 56.0 : 24.0;
-    self.containerWidthConstraint.constant = self.usesCompactContainer ? 260.0 : 320.0;
+    CGFloat widthMultiplier = self.usesCompactContainer ? 0.8 : 0.9;
+    self.containerWidthConstraint.constant = CGRectGetWidth(self.view.bounds) * widthMultiplier;
     [self updateLayoutAfterFixtureAction];
 }
 

@@ -218,6 +218,92 @@ static BOOL ZXShouldRequestSceneOrientation(NSDictionary<NSString *, NSString *>
     [self assertNavigationElements:app insideContainer:container state:state];
 }
 
+- (NSArray<NSString *> *)navigationAccessibilityIdentifiers {
+    return @[
+        @"fixture.nav.left",
+        @"fixture.nav.subLeft",
+        @"fixture.nav.title",
+        @"fixture.nav.subRight",
+        @"fixture.nav.right"
+    ];
+}
+
+- (NSDictionary<NSString *, NSString *> *)expectedNavigationAccessibilityLabels {
+    return @{
+        @"fixture.nav.left": @"Back",
+        @"fixture.nav.subLeft": @"Secondary back action",
+        @"fixture.nav.title": @"Fixture navigation title",
+        @"fixture.nav.subRight": @"Secondary action",
+        @"fixture.nav.right": @"Primary action"
+    };
+}
+
+- (XCUIElement *)navigationElementWithIdentifier:(NSString *)identifier app:(XCUIApplication *)app {
+    return [app descendantsMatchingType:XCUIElementTypeAny][identifier];
+}
+
+- (NSDictionary<NSString *, NSDictionary<NSString *, id> *> *)navigationAccessibilitySnapshot:(XCUIApplication *)app {
+    NSDictionary<NSString *, NSString *> *expectedLabels = [self expectedNavigationAccessibilityLabels];
+    NSMutableDictionary<NSString *, NSDictionary<NSString *, id> *> *snapshot = [NSMutableDictionary dictionary];
+    for (NSString *identifier in [self navigationAccessibilityIdentifiers]) {
+        XCUIElement *element = [self navigationElementWithIdentifier:identifier app:app];
+        XCTAssertTrue(element.exists, @"辅助功能元素必须存在：%@", identifier);
+        XCTAssertEqualObjects(element.identifier, identifier);
+        XCTAssertEqualObjects(element.label, expectedLabels[identifier], @"辅助功能文案必须保持明确的英文标签：%@", identifier);
+        XCTAssertTrue(element.enabled, @"辅助功能元素必须保持可用：%@", identifier);
+        snapshot[identifier] = @{
+            @"identifier": element.identifier ?: @"",
+            @"label": element.label ?: @"",
+            @"enabled": @(element.enabled)
+        };
+    }
+    return snapshot;
+}
+
+- (void)assertNavigationAccessibilitySnapshot:(NSDictionary<NSString *, NSDictionary<NSString *, id> *> *)snapshot
+                              equalsBaseline:(NSDictionary<NSString *, NSDictionary<NSString *, id> *> *)baseline {
+    for (NSString *identifier in [self navigationAccessibilityIdentifiers]) {
+        XCTAssertEqualObjects(snapshot[identifier], baseline[identifier], @"几何变化后辅助功能语义不得漂移：%@", identifier);
+    }
+}
+
+- (void)assertNavigationAccessibilityOrder:(XCUIApplication *)app {
+    NSMutableArray<XCUIElement *> *elements = [NSMutableArray array];
+    for (NSString *identifier in [self navigationAccessibilityIdentifiers]) {
+        [elements addObject:[self navigationElementWithIdentifier:identifier app:app]];
+    }
+    for (NSUInteger index = 1; index < elements.count; index++) {
+        XCUIElement *previous = elements[index - 1];
+        XCUIElement *current = elements[index];
+        XCTAssertLessThan(CGRectGetMidX(previous.frame), CGRectGetMidX(current.frame),
+                          @"最终物理 x 顺序必须为 leading actions、title、trailing actions：%@ -> %@",
+                          previous.identifier, current.identifier);
+    }
+}
+
+- (void)testAccessibilitySemanticsRemainStableAfterResizeAndRotation {
+    XCUIApplication *app = [self launchAdaptiveFixture];
+    NSDictionary<NSString *, NSDictionary<NSString *, id> *> *baseline = [self navigationAccessibilitySnapshot:app];
+    NSDictionary<NSString *, NSString *> *initialState = [self fixtureState:app];
+    CGRect initialContainer = [self fixtureRect:initialState[@"container"]];
+    [self assertFrame:initialContainer insideContainer:[self fixtureRect:initialState[@"window"]]];
+
+    [self tapFixtureControl:@"fixture.resize" app:app];
+    NSDictionary<NSString *, NSString *> *resizedState = [self fixtureState:app];
+    CGRect resizedContainer = [self fixtureRect:resizedState[@"container"]];
+    XCTAssertNotEqualWithAccuracy(resizedContainer.origin.x, initialContainer.origin.x, 0.5);
+    XCTAssertNotEqualWithAccuracy(resizedContainer.size.width, initialContainer.size.width, 0.5);
+    [self assertFrame:resizedContainer insideContainer:[self fixtureRect:resizedState[@"window"]]];
+    [self assertNavigationAccessibilitySnapshot:[self navigationAccessibilitySnapshot:app] equalsBaseline:baseline];
+
+    [self rotate:UIDeviceOrientationLandscapeLeft app:app];
+    [self assertNavigationAccessibilitySnapshot:[self navigationAccessibilitySnapshot:app] equalsBaseline:baseline];
+
+    [self rotate:UIDeviceOrientationPortrait app:app];
+    [self assertNavigationAccessibilitySnapshot:[self navigationAccessibilitySnapshot:app] equalsBaseline:baseline];
+    [self assertNavigationAccessibilityOrder:app];
+}
+
 - (void)assertNavigationElements:(XCUIApplication *)app insideContainer:(CGRect)container state:(NSDictionary *)state {
     XCTAssertEqualObjects(state[@"titleIdentifier"], @"fixture.nav.title");
     XCTAssertEqualObjects(state[@"titleLabel"], @"Fixture navigation title");
