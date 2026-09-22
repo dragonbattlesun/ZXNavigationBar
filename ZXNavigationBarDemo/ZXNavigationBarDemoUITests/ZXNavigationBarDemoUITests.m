@@ -8,6 +8,15 @@
 
 #import <XCTest/XCTest.h>
 
+static BOOL ZXAllowsSceneOrientationFallback(NSDictionary<NSString *, NSString *> *environment) {
+    return [environment[@"XNAV_ALLOW_SCENE_ORIENTATION_FALLBACK"] isEqualToString:@"1"];
+}
+
+// 只允许显式授权的超时回退；其他等待错误也不得由 Scene 请求掩盖。
+static BOOL ZXShouldRequestSceneOrientation(NSDictionary<NSString *, NSString *> *environment, XCTWaiterResult result) {
+    return result == XCTWaiterResultTimedOut && ZXAllowsSceneOrientationFallback(environment);
+}
+
 @interface ZXNavigationBarDemoUITests : XCTestCase
 
 @end
@@ -16,6 +25,16 @@
 
 - (void)setUp {
     self.continueAfterFailure = NO;
+}
+
+- (void)testSceneOrientationFallbackRequiresExplicitOptIn {
+    NSString *key = @"XNAV_ALLOW_SCENE_ORIENTATION_FALLBACK";
+    for (NSDictionary *environment in @[@{}, @{key: @""}, @{key: @"0"}, @{key: @"true"}, @{key: @"01"}]) {
+        XCTAssertFalse(ZXShouldRequestSceneOrientation(environment, XCTWaiterResultTimedOut), @"未精确 opt-in 时超时不得请求 Scene：%@", environment);
+    }
+    XCTAssertTrue(ZXShouldRequestSceneOrientation(@{key: @"1"}, XCTWaiterResultTimedOut));
+    XCTAssertFalse(ZXShouldRequestSceneOrientation(@{key: @"1"}, XCTWaiterResultCompleted));
+    XCTAssertFalse(ZXShouldRequestSceneOrientation(@{key: @"1"}, XCTWaiterResultInterrupted));
 }
 
 - (void)tearDown {
@@ -230,6 +249,10 @@
 
 - (void)rotate:(UIDeviceOrientation)orientation app:(XCUIApplication *)app {
     NSDictionary *initial = [self fixtureState:app];
+    NSDictionary *environment = NSProcessInfo.processInfo.environment;
+    BOOL allowsSceneFallback = ZXAllowsSceneOrientationFallback(environment);
+    NSInteger initialRequests = [initial[@"rotationRequests"] integerValue];
+    if (!allowsSceneFallback) { XCTAssertEqual(initialRequests, 0); }
     NSInteger revision = [initial[@"revision"] integerValue];
     CGRect initialWindow = [self fixtureRect:initial[@"window"]];
     XCUIDevice.sharedDevice.orientation = orientation;
@@ -242,8 +265,14 @@
             !CGSizeEqualToSize(window.size, initialWindow.size);
     }];
     XCTNSPredicateExpectation *deviceRotation = [[XCTNSPredicateExpectation alloc] initWithPredicate:finished object:app];
-    if ([XCTWaiter waitForExpectations:@[deviceRotation] timeout:2] != XCTWaiterResultCompleted) {
-        // Duo runtime 可能只更新设备方向，公开 Scene 请求仍需真实窗口几何收敛。
+    XCTWaiterResult deviceResult = [XCTWaiter waitForExpectations:@[deviceRotation] timeout:2];
+    BOOL requestedScene = ZXShouldRequestSceneOrientation(environment, deviceResult);
+    if (deviceResult != XCTWaiterResultCompleted && !requestedScene) {
+        XCTAssertEqual(deviceResult, XCTWaiterResultCompleted, @"XCUIDevice 旋转未收敛，禁止未显式 opt-in 的 Scene 回退；optIn=%d", allowsSceneFallback);
+        return;
+    }
+    if (requestedScene) {
+        // 仅测试进程显式 opt-in 时允许请求；仍要求真实窗口几何收敛。
         BOOL historyOpen = app.otherElements[@"fixture.history.overlay"].exists;
         NSString *identifier = [NSString stringWithFormat:@"%@.%@", historyOpen ? @"fixture.history.rotation" : @"fixture.rotation",
             UIDeviceOrientationIsLandscape(orientation) ? @"landscape" : @"portrait"];
@@ -252,7 +281,9 @@
     XCTNSPredicateExpectation *sceneRotation = [[XCTNSPredicateExpectation alloc] initWithPredicate:finished object:app];
     XCTWaiterResult result = [XCTWaiter waitForExpectations:@[sceneRotation] timeout:10];
     NSDictionary *final = [self fixtureState:app];
-    NSLog(@"旋转路径：Scene requests %@ -> %@; window %@ -> %@; orientation %@ -> %@; error=%@", initial[@"rotationRequests"], final[@"rotationRequests"], initial[@"window"], final[@"window"], initial[@"sceneOrientation"], final[@"sceneOrientation"], final[@"rotationError"]);
+    NSLog(@"旋转路径：optIn=%d; sceneFallback=%d; Scene requests %@ -> %@; window %@ -> %@; orientation %@ -> %@; error=%@", allowsSceneFallback, requestedScene, initial[@"rotationRequests"], final[@"rotationRequests"], initial[@"window"], final[@"window"], initial[@"sceneOrientation"], final[@"sceneOrientation"], final[@"rotationError"]);
+    XCTAssertEqual([final[@"rotationRequests"] integerValue], initialRequests + (requestedScene ? 1 : 0));
+    if (!allowsSceneFallback) { XCTAssertEqual([final[@"rotationRequests"] integerValue], 0); }
     XCTAssertEqualObjects(final[@"rotationError"], @"none");
     XCTAssertEqual(result, XCTWaiterResultCompleted);
     XCTAssertEqual([final[@"sceneLandscape"] boolValue], UIDeviceOrientationIsLandscape(orientation));
