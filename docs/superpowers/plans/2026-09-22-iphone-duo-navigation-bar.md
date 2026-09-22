@@ -346,6 +346,8 @@
 - Modify: `ZXNavigationBar/ZXNavigationBarTableViewController.m`
 - Modify: `ZXNavigationBarDemo/ZXNavigationBarDemo/ZXNavigationBar/ZXNavigationBarController.m`
 - Modify: `ZXNavigationBarDemo/ZXNavigationBarDemo/ZXNavigationBar/ZXNavigationBarTableViewController.m`
+- Modify: `ZXNavigationBarDemo/ZXNavigationBarDemo/AppDelegate.m`
+- Modify: `ZXNavigationBarDemo/ZXNavigationBarDemo/Info.plist`
 - Modify: `ZXNavigationBarDemo/ZXNavigationBarDemo/Demo/DemoAdaptiveLayoutViewController/DemoAdaptiveLayoutViewController.m`
 - Modify: `ZXNavigationBarDemo/ZXNavigationBarDemoUITests/ZXNavigationBarDemoUITests.m`
 
@@ -465,6 +467,8 @@
   test -n "$XNAV_DUO_UDID"
   ```
 
+  若 iOS 27.1 在策略断言前因缺少 `UIScene` lifecycle 拒绝启动，先保留 crash / OSLog，不能计为业务 RED。依据 Apple 官方 TN3187，在 Demo 的 `Info.plist` 增加单 Scene manifest，并在 `AppDelegate.m` 内用文件私有 SceneDelegate 通过 `UIWindow(windowScene:)` 创建窗口；默认 Demo 与 fixture 复用同一 root builder，旧系统保留 AppDelegate fallback。迁移后先增加并通过默认 Demo 与 fixture 两条启动 smoke，再重新取得 `automatic != disabled` 的真实策略 RED。该前置只解决 Demo 启动，不修改生产 Pod 或引入多 Scene 业务。
+
 - [ ] **Step 2：实现稳定模式决策**
 
   两个控制器增加相同的私有判断：
@@ -519,7 +523,10 @@
     -scheme ZXNavigationBarDemo \
     -derivedDataPath "$XNAV_DERIVED/xcode-27-1" \
     -destination "platform=iOS Simulator,id=$XNAV_DUO_UDID" \
+    -only-testing:ZXNavigationBarDemoUITests/ZXNavigationBarDemoUITests/testDefaultDemoLaunchesWithoutFixtureArguments \
+    -only-testing:ZXNavigationBarDemoUITests/ZXNavigationBarDemoUITests/testAdaptiveFixtureLaunchesWithoutChangingDefaultDemo \
     -only-testing:ZXNavigationBarDemoUITests/ZXNavigationBarDemoUITests/testVerticalBarPolicyMatchesVisibleNavigationMode \
+    -only-testing:ZXNavigationBarDemoUITests/ZXNavigationBarDemoUITests/testTableVerticalBarPolicyMatchesVisibleNavigationMode \
     IPHONEOS_DEPLOYMENT_TARGET=17.0 \
     test
   ```
@@ -532,6 +539,8 @@
   git add ZXNavigationBar/ZXNavigationBarController.m ZXNavigationBar/ZXNavigationBarTableViewController.m \
     ZXNavigationBarDemo/ZXNavigationBarDemo/ZXNavigationBar/ZXNavigationBarController.m \
     ZXNavigationBarDemo/ZXNavigationBarDemo/ZXNavigationBar/ZXNavigationBarTableViewController.m \
+    ZXNavigationBarDemo/ZXNavigationBarDemo/AppDelegate.m \
+    ZXNavigationBarDemo/ZXNavigationBarDemo/Info.plist \
     ZXNavigationBarDemo/ZXNavigationBarDemo/Demo/DemoAdaptiveLayoutViewController/DemoAdaptiveLayoutViewController.m \
     ZXNavigationBarDemo/ZXNavigationBarDemoUITests/ZXNavigationBarDemoUITests.m
   git commit -m "feat(iOS 27.1): 配置自定义导航栏竖向栏回退"

@@ -153,6 +153,7 @@ TalkMePRD 当前 `origin/main` 的 iPhone Duo V1.1 草案仍保留 iOS 16.0 表�
 - iOS 27.1 reserved region 查询失败或尚未入窗：本轮使用当前 safe area，下一次有效布局自动重算；不跨 Scene 猜测 region。
 - Xcode 27.0 编译：iOS 27.1 类型和方法被预处理排除。
 - Xcode 27.1 编译：新 API 编译通过，Pod deployment target 保持 iOS 16.0。
+- iOS 27 / 最新 SDK 启动：Apple 官方 TN3187 明确要求采用 UIKit scene-based lifecycle，否则 App 无法启动。Demo 使用单 `UIWindowScene` 的最小迁移，程序化 root 在 `scene:willConnectToSession:options:` 中创建；旧生命周期入口仅保留为旧系统回退，不扩展为多 Scene 业务改造。
 - 多 Scene：只使用当前控制器所在 window，不跨 Scene 回退到任意窗口。
 - 自定义 frame：调用方显式 frame/block 优先，库只负责在新的容器输入到来时再次调用既有 block。
 - 旋转中折叠动画：不取消业务回调、不重置目标折叠态；仅更新与高度无关的几何，结束后最终校正。
@@ -191,6 +192,7 @@ TalkMePRD 当前 `origin/main` 的 iPhone Duo V1.1 草案仍保留 iOS 16.0 表�
 
 - Xcode 27.1 / iOS 27.1 iPhone Duo：运行上述 UI 用例，并在 Device Hub 可用时补充外屏、内屏、book-folded、tabletop、tent、Split View 左右和旋转截图。
 - 当前稳定 Xcode 27.0：编译 Demo 和 Pod 源码，证明 iOS 27.1 符号被正确隔离。
+- Demo lifecycle：在 iOS 17.0 与 iOS 27.1 分别验证默认 Demo 和带启动参数 fixture 均能进入正确 root，防止 Scene 迁移改变默认流程。
 - Pod iOS 16.0：通过 podspec lint / build 验证库源码的 deployment target；不把 Xcode 27 的 XCTest/XCUIAutomation iOS 17.0 最低构建版本误算为 Pod 限制。
 - iOS 17.0 Simulator：运行代表性 portrait / landscape / resize 回归，证明旧系统横向栏可工作。
 - CocoaPods：执行本地 podspec lint / build；若网络或 CocoaPods 环境阻塞，保留原始失败并以 Demo 双工具链构建作为有限证据，不能声称 lint 通过。
