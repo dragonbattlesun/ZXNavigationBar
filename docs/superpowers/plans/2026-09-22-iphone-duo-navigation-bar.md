@@ -700,6 +700,43 @@
   git commit -m "test(无障碍): 固化旋转后的导航栏语义"
   ```
 
+### Task 7.1：关闭多 Agent 审查发现的局部顶部与保留区域缺口
+
+**Files:**
+
+- Modify: `ZXNavigationBar/ZXNavigationBarGeometry.h`
+- Modify: `ZXNavigationBar/ZXNavigationBarGeometry.m`
+- Modify: `ZXNavigationBar/ZXNavigationBarSubViews/ZXNavHistoryStackView/View/ZXNavHistoryStackContentView.m`
+- Modify: `ZXNavigationBarDemo/ZXNavigationBarDemo/ZXNavigationBar/` 对应镜像文件
+- Modify: `ZXNavigationBarDemo/ZXNavigationBarDemo/Demo/DemoXibViewController/DemoXibViewController.m`
+- Modify: `ZXNavigationBarDemo/ZXNavigationBarDemo/Demo/DemoWeiboHotViewController/DemoWeiboHotViewController.m`
+- Modify: `ZXNavigationBarDemo/ZXNavigationBarDemoTests/ZXNavigationBarGeometryTests.m`
+- Modify: `ZXNavigationBarDemo/ZXNavigationBarDemoUITests/ZXNavigationBarDemoUITests.m`
+
+- [ ] **Step 1：先增加局部顶部与历史浮层 RED**
+
+  单元测试固定三条规则：尚未入窗的 View 返回 0；已位于状态栏下方的嵌套 View 使用自己的局部 `safeAreaInsets.top`，不复用 Scene 状态栏高度；历史浮层的首选 frame 跨越合成 division / occlusion 时必须收敛到锚点所在可用区段。先在旧实现运行，保存“未入窗仍回退进程级状态栏”或“嵌套 View 重复得到 Scene 状态栏高度”的首次失败。
+
+- [ ] **Step 2：最小修正局部顶部语义并同步镜像**
+
+  `ZXNavigationBarStatusBarHeightForView` 只返回传入 View 的 `safeAreaInsets.top`；空 View、尚未入窗且 safe area 为零时返回 0。保留函数名维持源码兼容，但不得读取 `windowScene.statusBarManager` 或 `UIApplication.statusBarFrame`。默认导航高度继续等于“局部 top + 44pt”，不得把 active reserved region 的 `maxY` 扩散为整栏高度。
+
+  增加纯几何函数，把一个 preferred frame 放进最接近其锚点的可用水平区段；历史栈 cover 仍覆盖窗口，交互列表按自身 active reserved region 计算并收缩，旋转 / resize 后重新计算。
+
+- [ ] **Step 3：增加默认 Demo 真实业务 RED/GREEN**
+
+  默认启动后进入“ZXNavigationBar属性设置”，为首个背景色开关增加稳定 identifier 与英文辅助功能 label。iOS 27.1 Duo 测试读取页面实际 active reserved region，断言开关存在、enabled、hittable、frame 不相交；点击后开关状态与导航栏背景探针都改变。只把与 reserved region 相交的设置行 label + switch 局部移动到同一最大可用区段，行背景和分割线保持全宽，未相交行恢复原 15pt 边距。
+
+  默认启动后再进入“仿微博热搜页面导航栏”，记录首个 cell 和导航内容行几何，断言连续 Feed 没有因右侧局部状态区域整体增加 top inset。导航内容行高度固定验证为 44pt。
+
+- [ ] **Step 4：补旋转边界和 vertical bar 实际证据**
+
+  在现有双向旋转断言中，每次 landscape 与恢复 portrait 后都显式验证导航容器、标题和五个动作 frame 位于 window/container 内。iOS 27.1 自定义栏与系统栏切换除 getter 字符串外，同时记录真实 safe area、导航栏 frame、window frame 与截图；`verticalBarEdge` 只作为 preferred edge 辅助证据，不能单独宣称最终系统轴已验证。
+
+- [ ] **Step 5：运行定向回归、镜像审计并提交**
+
+  两套 Xcode 命令都必须沿用隔离的 `OBJROOT`、`SYMROOT`、`DSTROOT` 与 `SHARED_PRECOMPS_DIR`。先跑全部 geometry tests、默认 Demo 两条业务流、history 与双向旋转测试，再执行生产 / Demo 镜像 `diff -u`。提交信息使用 `fix(iPhone Duo): 局部避让状态区和保留区域`。
+
 ### Task 8：在 clean HEAD 上完成双版本、Duo 姿态和 Pod 验证
 
 **Files:**
@@ -731,6 +768,10 @@
     -scheme ZXNavigationBarDemo \
     -configuration Debug \
     -derivedDataPath "$XNAV_DERIVED/final-ios17" \
+    OBJROOT="$XNAV_DERIVED/final-ios17/Build/Intermediates.noindex" \
+    SYMROOT="$XNAV_DERIVED/final-ios17/Build/Products" \
+    DSTROOT="$XNAV_DERIVED/final-ios17/Dst" \
+    SHARED_PRECOMPS_DIR="$XNAV_DERIVED/final-ios17/Build/Intermediates.noindex/PrecompiledHeaders" \
     -destination "platform=iOS Simulator,id=$XNAV_SIM17_UDID" \
     IPHONEOS_DEPLOYMENT_TARGET=17.0 \
     test
@@ -746,6 +787,10 @@
     -scheme ZXNavigationBarDemo \
     -configuration Release \
     -derivedDataPath "$XNAV_DERIVED/final-xcode-27-0" \
+    OBJROOT="$XNAV_DERIVED/final-xcode-27-0/Build/Intermediates.noindex" \
+    SYMROOT="$XNAV_DERIVED/final-xcode-27-0/Build/Products" \
+    DSTROOT="$XNAV_DERIVED/final-xcode-27-0/Dst" \
+    SHARED_PRECOMPS_DIR="$XNAV_DERIVED/final-xcode-27-0/Build/Intermediates.noindex/PrecompiledHeaders" \
     -destination 'generic/platform=iOS Simulator' \
     IPHONEOS_DEPLOYMENT_TARGET=17.0 \
     CODE_SIGNING_ALLOWED=NO build
@@ -754,6 +799,10 @@
     -scheme ZXNavigationBarDemo \
     -configuration Release \
     -derivedDataPath "$XNAV_DERIVED/final-xcode-27-1" \
+    OBJROOT="$XNAV_DERIVED/final-xcode-27-1/Build/Intermediates.noindex" \
+    SYMROOT="$XNAV_DERIVED/final-xcode-27-1/Build/Products" \
+    DSTROOT="$XNAV_DERIVED/final-xcode-27-1/Dst" \
+    SHARED_PRECOMPS_DIR="$XNAV_DERIVED/final-xcode-27-1/Build/Intermediates.noindex/PrecompiledHeaders" \
     -destination 'generic/platform=iOS Simulator' \
     IPHONEOS_DEPLOYMENT_TARGET=17.0 \
     CODE_SIGNING_ALLOWED=NO build
@@ -763,6 +812,10 @@
     -project ZXNavigationBarDemo/ZXNavigationBarDemo.xcodeproj \
     -scheme ZXNavigationBarDemo \
     -derivedDataPath "$XNAV_DERIVED/final-duo" \
+    OBJROOT="$XNAV_DERIVED/final-duo/Build/Intermediates.noindex" \
+    SYMROOT="$XNAV_DERIVED/final-duo/Build/Products" \
+    DSTROOT="$XNAV_DERIVED/final-duo/Dst" \
+    SHARED_PRECOMPS_DIR="$XNAV_DERIVED/final-duo/Build/Intermediates.noindex/PrecompiledHeaders" \
     -destination "platform=iOS Simulator,id=$XNAV_DUO_UDID" \
     IPHONEOS_DEPLOYMENT_TARGET=17.0 \
     test
@@ -770,7 +823,7 @@
 
 - [ ] **Step 4：执行 iPhone Duo 姿态、旋转与截图验收**
 
-  在 Xcode 27.1 Device Hub 中只选择 `$XNAV_DUO_UDID`，运行 `ZXNavigationBarAdaptiveLayoutUITests` fixture。按顺序检查并截图：closed 外屏 portrait/landscape、open 内屏 portrait/landscape、book-folded、tabletop、tent，以及每种可用姿态下的 custom/system bar 切换、resize、history overlay。每张截图必须同时看到标题、左右动作和 `fixture.state`，以 `<pose>-<orientation>-<scenario>-$XNAV_FINAL_SHA.png` 命名并导出到 `$XNAV_EVIDENCE_DIR`。
+  在 Xcode 27.1 Device Hub 中只选择 `$XNAV_DUO_UDID`，先走默认 Demo 的属性设置与微博热搜真实入口，再运行 `ZXNavigationBarAdaptiveLayoutUITests` fixture。按顺序检查并截图：closed 外屏 portrait/landscape、open 内屏 portrait/landscape、book-folded、tabletop、tent、Split View 左侧与右侧，以及每种可用姿态下的 custom/system bar 切换、resize、history overlay。fixture 截图必须同时看到标题、左右动作和 `fixture.state`；默认 Demo 截图必须看到属性页首个开关或微博首个 cell。以 `<pose>-<orientation>-<scenario>-$XNAV_FINAL_SHA.png` 命名并导出到 `$XNAV_EVIDENCE_DIR`。
 
   自动化至少覆盖双向旋转；Device Hub 若不提供某姿态或截图接口，保留原始界面/工具错误，把该姿态标为环境阻塞，不能用普通 iPhone 截图冒充。
 

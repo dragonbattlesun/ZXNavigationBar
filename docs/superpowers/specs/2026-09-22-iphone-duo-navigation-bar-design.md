@@ -27,7 +27,7 @@ TalkMePRD 当前 `origin/main` 的 iPhone Duo V1.1 草案仍保留 iOS 16.0 表�
 ### 2.1 目标
 
 - 默认 ZX 导航栏宽度始终跟随所属控制器 `view.bounds.width`，不跟随物理屏幕宽度。
-- 状态栏高度取自当前 `view.window.windowScene.statusBarManager`；左右安全区分别取当前 View 的 `safeAreaInsets.left/right`。
+- 自定义导航栏的内容行保持现有 44pt 语义；顶部占用只取当前 View 的局部 `safeAreaInsets.top`，不得把 Scene 全局状态栏高度或 Duo 局部 reserved region 的 `maxY` 扩散成整栏高度。左右安全区分别取当前 View 的 `safeAreaInsets.left/right`。
 - iOS 27.1 中，标题与交互按钮避开与导航栏相交的 active division / occlusion reserved region；旧系统使用 safe-area 回退。
 - 竖屏转横屏、横屏转竖屏、Duo 开合后旋转、部分折叠 resize、Split View 两侧 resize 后，导航栏、标题、左右按钮与历史浮层在最终布局周期内收敛到正确位置。
 - iOS 27.1 的 ZX 自定义栏使用稳定的横向兼容模式，避免系统竖向状态栏与横向自定义栏同时出现；系统导航栏路径继续参与系统竖向栏布局。
@@ -64,16 +64,12 @@ TalkMePRD 当前 `origin/main` 的 iPhone Duo V1.1 草案仍保留 iOS 16.0 表�
 
 - 当前容器 `bounds`；
 - 当前 View 的四边 safe area；
-- 当前 WindowScene 的状态栏 frame / 高度；
-- View 尚未进入 window 时的兼容回退值。
+- 当前 View 在自身坐标空间内实际承担的顶部 safe-area 高度；
+- View 尚未进入 window 时的确定性零值。
 
 内部新代码不再读取 `ZXScreenWidth`、`ZXMainWindow`、`ZXIsHorizontalScreen` 或 `ZXHorizontaledSafeArea`。为保持源码兼容，现有公开宏本轮不删除；只停止在本次涉及的内部布局路径中使用，并在注释中标明新实现应使用带 View 上下文的助手。
 
-回退顺序固定为：
-
-1. `view.window.windowScene.statusBarManager.statusBarFrame`；
-2. 当前 View 的 `safeAreaInsets.top`；
-3. iOS 13 以下或 View 尚未入窗时使用现有 legacy 状态栏计算。
+`ZXNavigationBarStatusBarHeightForView` 为保持源码兼容继续沿用旧名称，但语义固定为“当前 View 的局部顶部占用”。有 View 时只返回其 `safeAreaInsets.top`；空 View、尚未入窗且 safe area 尚未建立时返回 0。不得回退到 `UIApplication.statusBarFrame`，也不得把 `windowScene.statusBarManager.statusBarFrame.height` 用到已经位于状态栏下方的嵌套容器，否则会重复增加顶部高度。
 
 当 `bounds` 暂时为零时不把现有导航栏压成零宽，保留上一次有效几何并等待下一次布局回调。
 
@@ -82,7 +78,7 @@ TalkMePRD 当前 `origin/main` 的 iPhone Duo V1.1 草案仍保留 iOS 16.0 表�
 两个控制器共享同一套更新规则：
 
 - 默认 frame 的宽度来自 `self.view.bounds.size.width`；调用方设置的 `zx_navFixFrame` 仍拥有最高优先级。
-- 默认高度由当前 scene 状态栏高度加现有内容栏高度组成；`zx_navFixHeight` 继续覆盖默认高度。
+- 默认高度由当前 View 的局部顶部 safe-area 高度加现有 44pt 内容栏高度组成；如果宿主 View 已位于安全区内，局部 top 为 0，不再重复增加 Scene 状态栏高度。`zx_navFixHeight` 继续覆盖默认高度。
 - `viewDidLayoutSubviews` 执行幂等几何更新；`viewSafeAreaInsetsDidChange` 请求下一轮更新，覆盖旋转、窗口 resize、Duo 开合、Split View 和系统栏变化。
 - `viewWillTransitionToSize:withTransitionCoordinator:` 只负责在系统转场动画与结束点各触发一次布局收敛，不使用 `UIDeviceOrientation` 推导宽高。
 - XIB 顶部约束和 TableView `contentInset` 使用同一轮当前导航栏高度与当前 View safe area 重算，不能继续减去全局 window 的 top inset。
@@ -94,7 +90,7 @@ TalkMePRD 当前 `origin/main` 的 iPhone Duo V1.1 草案仍保留 iOS 16.0 表�
 
 - 左按钮使用 `safeAreaInsets.left`，右按钮使用 `safeAreaInsets.right`，不再假设两边相等。
 - 标题可用区继续按左右项目占用的较大值居中；结果宽度钳制为非负，窄容器中使用现有 label 截断行为，不产生负 frame。
-- 状态栏垂直偏移来自当前 window scene；背景、分割线、渐变层和自定义栏跟随 `bounds`。
+- 内容行垂直偏移来自当前导航栏 View 的局部 `safeAreaInsets.top`；背景可以覆盖整个 `bounds`，但背景延伸不改变 44pt 内容行和业务内容的结构高度。
 - 布局方法保持幂等；相同输入不重复产生可观察状态变化。
 
 ### 4.4 iOS 27.1 竖向系统栏策略
@@ -130,6 +126,13 @@ TalkMePRD 当前 `origin/main` 的 iPhone Duo V1.1 草案仍保留 iOS 16.0 表�
 - 浮层 frame 使用承载容器 `bounds`，cover view 使用自身 `bounds`，避免把 screen 坐标再次当作子视图坐标。
 - 旋转或 resize 时浮层保持显示并重新计算锚点、safe area 和列表位置；不再仅因 `UIDeviceOrientationDidChangeNotification` 自动关闭。
 - 承载 window 或锚点临时不可用时，本次展示安全失败或保持上一次有效位置，不跨 Scene 猜测其他 key window。
+- 历史列表作为前景交互容器，除 safe area 外还查询自身坐标系中的 active division / occlusion reserved regions；按锚点优先选择可用水平区段并收缩宽度，不能跨越折痕或摄像头遮挡。cover 背景仍可覆盖整个窗口。
+
+### 4.7 离散控件与连续内容的避让边界
+
+Demo 属性页用于验证普通业务控件：与 active reserved region 相交的离散设置行只把该行的 label 与 switch 作为一个局部容器移入同一可用水平区段，行背景和分割线保持全宽；不通过增高全局导航栏或下移整个页面解决。未与 reserved region 相交的行恢复原有 15pt 边距。
+
+仿微博热搜页面属于连续 Feed。按照系统 displacement 边界，列表背景和可滚动内容保持连续，不因右侧局部状态区域整体增加 top inset；导航栏返回、标题和动作继续各自在可用区段内避让。这样同时避免离散控件被遮挡和连续内容出现大块空白。
 
 ## 5. 旋转与 resize 数据流
 
@@ -184,15 +187,17 @@ TalkMePRD 当前 `origin/main` 的 iPhone Duo V1.1 草案仍保留 iOS 16.0 表�
 5. **竖屏转横屏、横屏转竖屏**：普通 Simulator 通过 `XCUIDevice.orientation` 执行双向旋转；若 iPhone Duo runtime 接收该输入但真实 `UIWindowScene.effectiveGeometry` 与 window bounds 不变，且 Beta Duo 测试命令显式启用 Scene 回退，Demo fixture 才可用公开 `requestGeometryUpdateWithPreferences:errorHandler:` 请求同一场景的横／竖屏几何。两条路径都必须等待真实 scene 与 window 收敛，不得直接改 frame；普通 runtime 未显式启用时超时必须失败。Scene 请求只作为自动化输入回退，不替代 Device Hub 物理姿态验收。
 6. **旋转叠加 resize**：先 resize 再旋转、先旋转再 resize，最终 frame 只由最新容器几何决定。
 7. **折叠动画中旋转**：触发栏折叠后立即旋转；宽度更新、动画目标高度和完成回调保持正确。
-8. **历史浮层**：浮层挂载当前 window，旋转 / resize 后仍显示、cover 填满容器，列表锚定当前返回按钮且不跨 safe area。
+8. **历史浮层**：浮层挂载当前 window，旋转 / resize 后仍显示、cover 填满容器，列表锚定当前返回按钮且不跨 safe area 或 active reserved region。
 9. **iOS 27.1 策略**：自定义栏 fixture 报告 disabled；系统导航栏 fixture 报告 automatic。
 10. **可访问性稳定性**：旋转 / resize 前后关键控件 identifier、英文 label、enabled 状态与可聚焦顺序保持不变。
+11. **局部顶部语义**：根 View 使用自己的 top safe area；已位于安全区内的嵌套 View 和尚未入窗的 View 不读取 Scene / UIApplication 全局状态栏高度。导航内容行保持 44pt。
+12. **默认 Demo 真实流程**：进入属性页后首个开关可见、可点击且不与真实 active reserved region 相交；点击后导航栏背景业务状态确实改变。进入微博热搜后列表不因右侧局部状态区域被整体向下推移。
 
 ### 8.3 构建与回归矩阵
 
 - Xcode 27.1 / iOS 27.1 iPhone Duo：运行上述 UI 用例，并在 Device Hub 可用时补充外屏、内屏、book-folded、tabletop、tent、Split View 左右和旋转截图。
 - 当前稳定 Xcode 27.0：编译 Demo 和 Pod 源码，证明 iOS 27.1 符号被正确隔离。
-- Demo lifecycle：在 iOS 17.0 与 iOS 27.1 分别验证默认 Demo 和带启动参数 fixture 均能进入正确 root，防止 Scene 迁移改变默认流程。
+- Demo lifecycle：在 iOS 17.0 与 iOS 27.1 分别验证默认 Demo 的属性页、微博热搜真实入口和带启动参数 fixture，防止 Scene 迁移或 reserved-region 修正改变默认流程。
 - Pod iOS 16.0：通过 podspec lint / build 验证库源码的 deployment target；不把 Xcode 27 的 XCTest/XCUIAutomation iOS 17.0 最低构建版本误算为 Pod 限制。
 - iOS 17.0 Simulator：运行代表性 portrait / landscape / resize 回归，证明旧系统横向栏可工作。
 - CocoaPods：执行本地 podspec lint / build；若网络或 CocoaPods 环境阻塞，保留原始失败并以 Demo 双工具链构建作为有限证据，不能声称 lint 通过。
@@ -224,7 +229,8 @@ TalkMePRD 当前 `origin/main` 的 iPhone Duo V1.1 草案仍保留 iOS 16.0 表�
 - 自定义栏在 iOS 27.1 返回 disabled，系统栏返回 automatic；Xcode 27.0 仍可编译。
 - portrait / landscape 双向旋转、嵌套容器、连续 resize、非对称 safe area 和 reserved-region 几何自动化通过。
 - 旋转与 resize 不改变导航栈、折叠目标状态、按钮动作或辅助功能语义。
-- 历史浮层绑定当前 scene/window，旋转后不消失、不越界、不跳到其他 Scene。
+- 导航栏结构高度不跟随 Duo 右侧局部系统状态区域增长；44pt 内容行与当前 View 的局部 top safe area 可分别验证，连续 Feed 不被全局下推。
+- 属性页离散开关与历史浮层绑定当前 scene/window，旋转后不消失、不越界、不进入 active reserved region、不跳到其他 Scene。
 - Pod 以 iOS 16.0 deployment target 编译通过；iOS 17.0 回归可工作；iOS 27.1 Duo 实际姿态有明确通过证据或诚实的环境阻塞记录。
 - 生产源码与 Demo 副本的本次适配补丁一致，历史差异未被顺手改写。
 - 最终提交仅包含本任务文档、源码、Demo fixture / 测试及必要工程配置；工作树 clean，验证证据绑定最终 commit。
