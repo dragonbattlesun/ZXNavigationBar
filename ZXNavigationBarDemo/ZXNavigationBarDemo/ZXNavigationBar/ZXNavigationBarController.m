@@ -181,10 +181,14 @@ static ZXNavStatusBarStyle defaultNavStatusBarStyle = ZXNavStatusBarStyleDefault
         if(!CGRectEqualToRect(self.zx_navFixFrame, CGRectZero)){
             self.zx_navBar.frame = self.zx_navFixFrame;
         }else{
+            CGFloat containerWidth = CGRectGetWidth(self.view.bounds);
+            if (containerWidth <= 0) {
+                return;
+            }
             if(self.zx_navIsFolded){
-                self.zx_navBar.frame = CGRectMake(0, 0, ZXScreenWidth, ZXAppStatusBarHeight);
+                self.zx_navBar.frame = CGRectMake(0, 0, containerWidth, ZXAppStatusBarHeight);
             }else{
-                self.zx_navBar.frame = CGRectMake(0, 0, ZXScreenWidth, [self getCurrentNavHeight]);
+                self.zx_navBar.frame = CGRectMake(0, 0, containerWidth, [self getCurrentNavHeight]);
             }
         }
         if(self.zx_navHandleFrameBlock){

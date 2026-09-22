@@ -8,6 +8,7 @@
 //  V1.4.1
 
 #import "ZXNavigationBar.h"
+#import "ZXNavigationBarGeometry.h"
 @interface ZXNavigationBar()
 @property (assign, nonatomic)BOOL shouldRefLayout;
 @property (assign, nonatomic)BOOL shouldRelayoutSubviews;
@@ -34,6 +35,13 @@
     }else{
         [self relayoutSubviews];
     }
+}
+
+- (void)safeAreaInsetsDidChange {
+    if (@available(iOS 11.0, *)) {
+        [super safeAreaInsetsDidChange];
+    }
+    [self setNeedsLayout];
 }
 
 #pragma mark - private
@@ -182,10 +190,11 @@
 }
 
 #pragma mark 拦截处理ItemBtn的frame
-- (void)handleItemBtnFrame:(ZXNavItemBtn *)barItemBtn{
+- (void)handleItemBtnFrame:(ZXNavItemBtn *)barItemBtn inSegment:(CGRect)segment{
     if(barItemBtn.zx_handleFrameBlock){
         barItemBtn.frame =  barItemBtn.zx_handleFrameBlock(barItemBtn.frame);
     }
+    barItemBtn.frame = ZXNavigationBarConstrainHorizontalFrame(barItemBtn.frame, segment);
     void(^frameUpdateBlock)(CGRect frame) = [barItemBtn valueForKey:@"zx_frameUpdateBlock"];
     if(frameUpdateBlock){
         frameUpdateBlock(barItemBtn.frame);
@@ -201,7 +210,7 @@
 
 #pragma mark 刷新导航栏titleView布局
 - (void)refNavBar{
-    self.zx_titleLabel.zx_width = CGRectGetMinX(self.zx_rightBtn.frame) - self.zx_itemMargin * 3 - self.zx_itemSize;
+    self.zx_titleLabel.zx_width = MAX(0, CGRectGetMinX(self.zx_rightBtn.frame) - self.zx_itemMargin * 3 - self.zx_itemSize);
     self.zx_titleView.zx_width = self.zx_titleLabel.zx_width;
 }
 
@@ -239,7 +248,15 @@
         return;
     }
     if(self.zx_leftBtn && self.zx_rightBtn && self.zx_titleLabel){
-        CGFloat centerOffSet = ZXAppStatusBarHeight;
+        CGFloat centerOffSet = ZXNavigationBarStatusBarHeightForView(self);
+        UIEdgeInsets safeAreaInsets = ZXNavigationBarSafeAreaInsetsForView(self);
+        CGFloat boundsWidth = MAX(0, CGRectGetWidth(self.bounds));
+        CGFloat boundsHeight = MAX(0, CGRectGetHeight(self.bounds));
+        CGRect contentBounds = CGRectMake(0, centerOffSet, boundsWidth, MAX(0, boundsHeight - centerOffSet));
+        NSArray<NSValue *> *reservedFrames = ZXNavigationBarActiveReservedRegionFramesForView(self);
+        NSArray<NSValue *> *segments = ZXNavigationBarAvailableHorizontalSegments(contentBounds, safeAreaInsets, reservedFrames);
+        CGRect leftSegment = segments.count ? segments.firstObject.CGRectValue : CGRectZero;
+        CGRect rightSegment = segments.count ? segments.lastObject.CGRectValue : CGRectZero;
         CGSize leftBtnSize = CGSizeZero;
         CGFloat leftBtnFinalHeight = [self getItemBtnHeight:self.zx_leftBtn];
         CGFloat leftBtnFinalWidth = [self getItemBtnWidth:self.zx_leftBtn];
@@ -250,8 +267,13 @@
         if(self.zx_leftBtn.zx_fixMarginLeft >= 0){
             leftBtnLeftMargin = self.zx_leftBtn.zx_fixMarginLeft;
         }
-        self.zx_leftBtn.frame = CGRectMake(leftBtnLeftMargin + ZXHorizontaledSafeArea,(self.zx_height - leftBtnFinalHeight + centerOffSet) / 2, leftBtnSize.width, leftBtnSize.height);
-        [self handleItemBtnFrame:self.zx_leftBtn];
+        self.zx_leftBtn.frame = CGRectMake(CGRectGetMinX(leftSegment) + MAX(0, leftBtnLeftMargin),(boundsHeight - leftBtnFinalHeight + centerOffSet) / 2, MAX(0, leftBtnSize.width), leftBtnSize.height);
+        [self handleItemBtnFrame:self.zx_leftBtn inSegment:leftSegment];
+        // 同一区段先保留主按钮，再分配次要按钮，避免窄容器中互相覆盖。
+        if (segments.count == 1) {
+            rightSegment.origin.x = CGRectGetMaxX(self.zx_leftBtn.frame);
+            rightSegment.size.width = MAX(0, CGRectGetMaxX(leftSegment) - CGRectGetMinX(rightSegment));
+        }
         CGSize rightBtnSize = CGSizeZero;
         CGFloat rightBtnFinalHeight = [self getItemBtnHeight:self.zx_rightBtn];
         CGFloat rightBtnFinalWidth = [self getItemBtnWidth:self.zx_rightBtn];
@@ -262,10 +284,14 @@
         if(self.zx_rightBtn.zx_fixMarginRight >= 0){
             rightBtnRightMargin = self.zx_rightBtn.zx_fixMarginRight;
         }
-        self.zx_rightBtn.frame = CGRectMake(self.zx_width - rightBtnRightMargin - rightBtnSize.width - ZXHorizontaledSafeArea,(self.zx_height - rightBtnFinalHeight + centerOffSet) / 2, rightBtnSize.width,rightBtnSize.height);
-        [self handleItemBtnFrame:self.zx_rightBtn];
+        self.zx_rightBtn.frame = CGRectMake(CGRectGetMaxX(rightSegment) - MAX(0, rightBtnRightMargin) - MAX(0, rightBtnSize.width),(boundsHeight - rightBtnFinalHeight + centerOffSet) / 2, MAX(0, rightBtnSize.width),rightBtnSize.height);
+        [self handleItemBtnFrame:self.zx_rightBtn inSegment:rightSegment];
+        rightSegment.size.width = MAX(0, CGRectGetMinX(self.zx_rightBtn.frame) - CGRectGetMinX(rightSegment));
+        CGFloat leftSegmentEnd = segments.count == 1 ? CGRectGetMinX(self.zx_rightBtn.frame) : CGRectGetMaxX(leftSegment);
+        leftSegment.origin.x = CGRectGetMaxX(self.zx_leftBtn.frame);
+        leftSegment.size.width = MAX(0, leftSegmentEnd - CGRectGetMinX(leftSegment));
         CGFloat subRightBtnFinalHeight = [self getItemBtnHeight:self.zx_subRightBtn];
-        CGFloat subRightBtnFinalWidth = [self getItemBtnWidth:self.zx_subRightBtn];
+        CGFloat subRightBtnFinalWidth = MAX(0, [self getItemBtnWidth:self.zx_subRightBtn]);
         CGFloat subRightBtnRightMargin = self.zx_itemMargin;
         if(self.zx_rightBtn.zx_fixMarginLeft >= 0){
             subRightBtnRightMargin = self.zx_rightBtn.zx_fixMarginLeft;
@@ -277,11 +303,14 @@
         if(!self.zx_subRightBtn.currentImage && !self.zx_subRightBtn.currentTitle && !self.zx_subRightBtn.currentAttributedTitle && !self.zx_subRightBtn.zx_customView){
             self.zx_subRightBtn.frame = CGRectMake(CGRectGetMinX(self.zx_rightBtn.frame) - subRightBtnRightFinalMargin, self.zx_rightBtn.zx_y, 0, 0);
         }else{
-            self.zx_subRightBtn.frame = CGRectMake(CGRectGetMinX(self.zx_rightBtn.frame) - subRightBtnRightFinalMargin - subRightBtnFinalWidth, (self.zx_height - subRightBtnFinalHeight + centerOffSet) / 2, subRightBtnFinalWidth, subRightBtnFinalHeight);;
+            self.zx_subRightBtn.frame = CGRectMake(CGRectGetMinX(self.zx_rightBtn.frame) - subRightBtnRightFinalMargin - subRightBtnFinalWidth, (boundsHeight - subRightBtnFinalHeight + centerOffSet) / 2, subRightBtnFinalWidth, subRightBtnFinalHeight);
         }
-        [self handleItemBtnFrame:self.zx_subRightBtn];
+        [self handleItemBtnFrame:self.zx_subRightBtn inSegment:rightSegment];
+        if (segments.count == 1) {
+            leftSegment.size.width = MAX(0, CGRectGetMinX(self.zx_subRightBtn.frame) - CGRectGetMinX(leftSegment));
+        }
         CGFloat subLeftBtnFinalHeight = [self getItemBtnHeight:self.zx_subLeftBtn];
-        CGFloat subLeftBtnFinalWidth = [self getItemBtnWidth:self.zx_subLeftBtn];
+        CGFloat subLeftBtnFinalWidth = MAX(0, [self getItemBtnWidth:self.zx_subLeftBtn]);
         CGFloat subLeftBtnLeftMargin = self.zx_itemMargin;
         if(self.zx_leftBtn.zx_fixMarginRight >= 0){
             subLeftBtnLeftMargin = self.zx_leftBtn.zx_fixMarginRight;
@@ -293,9 +322,9 @@
         if(!self.zx_subLeftBtn.currentImage && !self.zx_subLeftBtn.currentTitle && !self.zx_subLeftBtn.currentAttributedTitle && !self.zx_subLeftBtn.zx_customView){
             self.zx_subLeftBtn.frame = CGRectMake(CGRectGetMaxX(self.zx_leftBtn.frame) + subLeftBtnLeftFinalMargin, self.zx_leftBtn.zx_y, 0, 0);
         }else{
-            self.zx_subLeftBtn.frame = CGRectMake(CGRectGetMaxX(self.zx_leftBtn.frame) + subLeftBtnLeftFinalMargin, (self.zx_height - subLeftBtnFinalHeight + centerOffSet) / 2, subLeftBtnFinalWidth, subLeftBtnFinalHeight);
+            self.zx_subLeftBtn.frame = CGRectMake(CGRectGetMaxX(self.zx_leftBtn.frame) + subLeftBtnLeftFinalMargin, (boundsHeight - subLeftBtnFinalHeight + centerOffSet) / 2, subLeftBtnFinalWidth, subLeftBtnFinalHeight);
         }
-        [self handleItemBtnFrame:self.zx_subLeftBtn];
+        [self handleItemBtnFrame:self.zx_subLeftBtn inSegment:leftSegment];
         CGFloat leftBtnFakeWidth = CGRectGetMaxX(self.zx_subLeftBtn.frame);
         CGFloat titleLabelLeftMargin = self.zx_itemMargin;
         if(self.zx_subLeftBtn.zx_fixMarginRight >= 0){
@@ -308,15 +337,27 @@
         if(self.zx_subLeftBtn.zx_width){
             leftBtnFakeWidth += titleLabelLeftMargin;
         }
-        CGFloat rightBtnFakeWidth = self.zx_width - self.zx_subRightBtn.zx_x;
+        CGFloat rightBtnFakeWidth = boundsWidth - self.zx_subRightBtn.zx_x;
         if(self.zx_subRightBtn.zx_width){
             rightBtnFakeWidth += titleLabelRightMargin;
         }
         CGFloat maxItemWidth = MAX(leftBtnFakeWidth,rightBtnFakeWidth);
-        self.zx_titleLabel.frame = CGRectMake(maxItemWidth,centerOffSet,self.zx_width - maxItemWidth * 2,self.zx_height - centerOffSet);
+        CGRect titleFrame = CGRectMake(MIN(boundsWidth, MAX(0, maxItemWidth)), centerOffSet, MAX(0, boundsWidth - maxItemWidth * 2), CGRectGetHeight(contentBounds));
+        if (reservedFrames.count) {
+            NSMutableArray<NSValue *> *titleExclusions = [reservedFrames mutableCopy];
+            for (ZXNavItemBtn *button in @[self.zx_leftBtn, self.zx_rightBtn, self.zx_subLeftBtn, self.zx_subRightBtn]) {
+                if (CGRectGetWidth(button.frame) > 0) {
+                    // 水平方向的占用贯穿整行，标题不能与较矮按钮重叠。
+                    CGRect occupied = CGRectMake(CGRectGetMinX(button.frame), centerOffSet, CGRectGetWidth(button.frame), CGRectGetHeight(contentBounds));
+                    [titleExclusions addObject:[NSValue valueWithCGRect:occupied]];
+                }
+            }
+            titleFrame = ZXNavigationBarLargestHorizontalSegment(ZXNavigationBarAvailableHorizontalSegments(contentBounds, safeAreaInsets, titleExclusions));
+        }
+        self.zx_titleLabel.frame = titleFrame;
         self.zx_titleView.frame = self.zx_titleLabel.frame;
-        self.zx_lineView.frame = CGRectMake(0, self.zx_height - self.zx_lineViewHeight, self.zx_width, self.zx_lineViewHeight);
-        self.zx_bacImageView.frame = self.frame;
+        self.zx_lineView.frame = CGRectMake(CGRectGetMinX(self.bounds), CGRectGetMaxY(self.bounds) - self.zx_lineViewHeight, boundsWidth, self.zx_lineViewHeight);
+        self.zx_bacImageView.frame = self.bounds;
         self.shouldRefLayout = NO;
     }
     if(self.zx_gradientLayer){

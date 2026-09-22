@@ -186,3 +186,13 @@ CGRect ZXNavigationBarLargestHorizontalSegment(NSArray<NSValue *> *segments) {
     }
     return largestSegment;
 }
+
+CGRect ZXNavigationBarConstrainHorizontalFrame(CGRect frame, CGRect segment) {
+    CGFloat minX = CGRectGetMinX(segment);
+    CGFloat maxX = minX + MAX(0, CGRectGetWidth(segment));
+    CGFloat originX = MIN(maxX, MAX(minX, CGRectGetMinX(frame)));
+    CGFloat endX = MIN(maxX, CGRectGetMinX(frame) + MAX(0, CGRectGetWidth(frame)));
+    frame.origin.x = originX;
+    frame.size.width = MAX(0, endX - originX);
+    return frame;
+}

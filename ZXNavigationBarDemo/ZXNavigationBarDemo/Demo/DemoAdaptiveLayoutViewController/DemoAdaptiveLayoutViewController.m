@@ -212,18 +212,24 @@
 }
 
 - (void)updateFixtureState {
+    [self.currentViewController.view layoutIfNeeded];
+    [self.currentViewController.zx_navBar layoutIfNeeded];
     CGRect containerFrame = [self.fixtureNavigationController.view.superview convertRect:self.fixtureNavigationController.view.frame toView:self.view];
     CGRect navigationFrame = [self.currentViewController.view convertRect:self.currentViewController.zx_navBar.frame toView:self.view];
+    UILabel *titleLabel = self.currentViewController.zx_navTitleLabel;
+    CGRect titleFrame = [titleLabel.superview convertRect:titleLabel.frame toView:self.view];
     UIEdgeInsets safeAreaInsets = self.currentViewController.view.safeAreaInsets;
     NSString *mode = self.currentViewController.zx_showSystemNavBar ? @"system" : @"custom";
-    self.stateLabel.text = [NSString stringWithFormat:@"revision=%ld;container={%.1f,%.1f,%.1f,%.1f};nav={%.1f,%.1f,%.1f,%.1f};safe={%.1f,%.1f,%.1f,%.1f};mode=%@;folded=%d;table=%d",
+    self.stateLabel.text = [NSString stringWithFormat:@"revision=%ld;container={%.1f,%.1f,%.1f,%.1f};nav={%.1f,%.1f,%.1f,%.1f};safe={%.1f,%.1f,%.1f,%.1f};mode=%@;folded=%d;table=%d;title={%.1f,%.1f,%.1f,%.1f};titleIdentifier=%@;titleLabel=%@",
                             (long)self.revision,
                             CGRectGetMinX(containerFrame), CGRectGetMinY(containerFrame), CGRectGetWidth(containerFrame), CGRectGetHeight(containerFrame),
                             CGRectGetMinX(navigationFrame), CGRectGetMinY(navigationFrame), CGRectGetWidth(navigationFrame), CGRectGetHeight(navigationFrame),
                             safeAreaInsets.top, safeAreaInsets.left, safeAreaInsets.bottom, safeAreaInsets.right,
                             mode,
                             self.currentViewController.zx_navIsFolded,
-                            self.tableModeRequested];
+                            self.tableModeRequested,
+                            CGRectGetMinX(titleFrame), CGRectGetMinY(titleFrame), CGRectGetWidth(titleFrame), CGRectGetHeight(titleFrame),
+                            titleLabel.accessibilityIdentifier, titleLabel.accessibilityLabel];
     self.stateLabel.accessibilityValue = self.stateLabel.text;
 }
 

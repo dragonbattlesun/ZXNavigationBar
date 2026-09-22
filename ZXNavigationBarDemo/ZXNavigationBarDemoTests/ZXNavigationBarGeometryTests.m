@@ -148,4 +148,35 @@ FOUNDATION_EXPORT NSArray<NSValue *> *ZXNavigationBarGeometryFilterActiveReserve
     XCTAssertEqualWithAccuracy(actual.size.height, expected.size.height, 0.5);
 }
 
+- (void)testPrimaryActionConsumesNarrowSegmentBeforeSecondaryAction {
+    CGRect segment = CGRectMake(20, 20, 25, 44);
+    CGRect primary = ZXNavigationBarConstrainHorizontalFrame(CGRectMake(20, 25, 40, 30), segment);
+    [self assertRect:primary equals:CGRectMake(20, 25, 25, 30)];
+    CGRect remaining = CGRectMake(CGRectGetMaxX(primary), 20, MAX(0, CGRectGetMaxX(segment) - CGRectGetMaxX(primary)), 44);
+    CGRect secondary = ZXNavigationBarConstrainHorizontalFrame(CGRectMake(CGRectGetMaxX(primary) + 8, 25, 30, 30), remaining);
+    [self assertRect:secondary equals:CGRectMake(45, 25, 0, 30)];
+    [self assertRect:ZXNavigationBarConstrainHorizontalFrame(CGRectMake(5, 25, 40, 30), segment)
+              equals:CGRectMake(20, 25, 25, 30)];
+}
+
+- (void)testTitleUsesLargestSegmentAfterBothButtonGroupsAreExcluded {
+    NSArray *exclusions = @[
+        [NSValue valueWithCGRect:CGRectMake(100, 0, 20, 100)],
+        [NSValue valueWithCGRect:CGRectMake(0, 20, 40, 44)],
+        [NSValue valueWithCGRect:CGRectMake(250, 20, 50, 44)]
+    ];
+    NSArray *segments = ZXNavigationBarAvailableHorizontalSegments(CGRectMake(0, 20, 300, 44), UIEdgeInsetsZero, exclusions);
+    [self assertRect:ZXNavigationBarLargestHorizontalSegment(segments) equals:CGRectMake(120, 20, 130, 44)];
+}
+
+- (void)testTitleReturnsZeroWhenButtonsConsumeAllRemainingSegments {
+    NSArray *exclusions = @[
+        [NSValue valueWithCGRect:CGRectMake(40, 0, 20, 100)],
+        [NSValue valueWithCGRect:CGRectMake(0, 20, 40, 44)],
+        [NSValue valueWithCGRect:CGRectMake(60, 20, 40, 44)]
+    ];
+    NSArray *segments = ZXNavigationBarAvailableHorizontalSegments(CGRectMake(0, 20, 100, 44), UIEdgeInsetsZero, exclusions);
+    [self assertRect:ZXNavigationBarLargestHorizontalSegment(segments) equals:CGRectZero];
+}
+
 @end

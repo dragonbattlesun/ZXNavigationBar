@@ -11,5 +11,6 @@ FOUNDATION_EXPORT NSArray<NSValue *> *ZXNavigationBarAvailableHorizontalSegments
     NSArray<NSValue *> *excludedFrames
 );
 FOUNDATION_EXPORT CGRect ZXNavigationBarLargestHorizontalSegment(NSArray<NSValue *> *segments);
+FOUNDATION_EXPORT CGRect ZXNavigationBarConstrainHorizontalFrame(CGRect frame, CGRect segment);
 
 NS_ASSUME_NONNULL_END
