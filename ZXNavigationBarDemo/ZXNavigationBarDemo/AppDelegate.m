@@ -7,8 +7,32 @@
 //
 
 #import "AppDelegate.h"
+#import "DemoAdaptiveLayoutViewController.h"
 #import "DemoListViewController.h"
 #import "ZXNavigationBarNavigationController.h"
+
+static UIViewController *DemoRootViewController(void) {
+    if ([[NSProcessInfo processInfo].arguments containsObject:@"ZXNavigationBarAdaptiveLayoutUITests"]) {
+        return [[DemoAdaptiveLayoutViewController alloc] init];
+    }
+    DemoListViewController *controller = [[DemoListViewController alloc] init];
+    return [[ZXNavigationBarNavigationController alloc] initWithRootViewController:controller];
+}
+
+API_AVAILABLE(ios(13.0))
+@interface DemoSceneDelegate : UIResponder <UIWindowSceneDelegate>
+@property (strong, nonatomic) UIWindow *window;
+@end
+
+@implementation DemoSceneDelegate
+- (void)scene:(UIScene *)scene willConnectToSession:(UISceneSession *)session options:(UISceneConnectionOptions *)connectionOptions {
+    if (![scene isKindOfClass:[UIWindowScene class]]) { return; }
+    self.window = [[UIWindow alloc] initWithWindowScene:(UIWindowScene *)scene];
+    self.window.rootViewController = DemoRootViewController();
+    [self.window makeKeyAndVisible];
+}
+@end
+
 @interface AppDelegate ()
 
 @end
@@ -17,10 +41,12 @@
 
 
 - (BOOL)application:(UIApplication *)application didFinishLaunchingWithOptions:(NSDictionary *)launchOptions {
+    if (@available(iOS 13.0, *)) {
+        // Scene delegate 持有窗口；避免同时创建旧生命周期窗口。
+        return YES;
+    }
     UIWindow *window = [[UIWindow alloc]initWithFrame:[UIScreen mainScreen].bounds];
-    DemoListViewController *vc = [[DemoListViewController alloc]init];
-    ZXNavigationBarNavigationController *nav = [[ZXNavigationBarNavigationController alloc]initWithRootViewController:vc];
-    window.rootViewController = nav;
+    window.rootViewController = DemoRootViewController();
     [window makeKeyAndVisible];
     self.window = window;
     return YES;

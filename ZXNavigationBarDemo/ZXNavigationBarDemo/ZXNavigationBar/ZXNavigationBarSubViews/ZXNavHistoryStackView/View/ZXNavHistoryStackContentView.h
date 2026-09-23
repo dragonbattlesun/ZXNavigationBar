@@ -21,6 +21,10 @@ NS_ASSUME_NONNULL_BEGIN
 ///导航栏历史堆栈视图显示样式
 @property (assign, nonatomic) ZXNavHistoryStackViewStyle zx_historyStackViewStyle;
 - (instancetype)zx_show;
+/// 在当前窗口所属容器中展示；锚点可为空，不推测其他 Scene 的窗口。
+/// 始终返回 receiver。容器、非空锚点、所属窗口或几何无法安全展示时，
+/// 保持未挂载或调用前的原状态；不能仅凭返回值非 nil 判断展示成功。
+- (instancetype)zx_showInContainerView:(UIView *)containerView anchorView:(UIView * _Nullable)anchorView;
 - (void)zx_hide;
 @end
 

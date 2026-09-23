@@ -10,6 +10,7 @@
 #import "ZXNavigationBarController.h"
 #import "ZXNavigationBarTableViewController.h"
 #import "ZXNavHistoryStackContentView.h"
+#import "ZXNavigationBarGeometry.h"
 
 #import <objc/message.h>
 #import "UIImage+ZXNavBundleExtension.h"
@@ -20,6 +21,11 @@
 @end
 @interface ZXNavigationBarController ()<UIGestureRecognizerDelegate>
 @property(assign, nonatomic)BOOL setFold;
+@property(assign, nonatomic)NSUInteger foldGeneration;
+@property(assign, nonatomic)CGFloat lastConstraintOffset;
+@property(assign, nonatomic)CGFloat lastConstraintSafeTop;
+@property(assign, nonatomic)BOOL lastConstraintChecksSafeArea;
+@property(assign, nonatomic)BOOL lastConstraintDisablesSafeLayout;
 @property(assign, nonatomic)CGFloat lastNavAlphe;
 @property(assign, nonatomic)BOOL isNavFoldAnimating;
 @property(assign, nonatomic)BOOL doAutoSysBarAlphe;
@@ -45,9 +51,38 @@ static ZXNavStatusBarStyle defaultNavStatusBarStyle = ZXNavStatusBarStyleDefault
     }
     [self checkDoAutoSysBarAlpha];
     [self hanldeCustomPopGesture];
+    [self zx_requestVerticalBarConfigurationUpdate];
 }
 
 #pragma mark - private
+- (BOOL)zx_usesVisibleCustomNavigationBar {
+    return !self.zx_disableAutoSetCustomNavBar &&
+           !self.zx_showSystemNavBar &&
+           !self.zx_hideBaseNavBar &&
+           self.zx_navBar != nil &&
+           !self.zx_navBar.hidden;
+}
+
+#if defined(__IPHONE_27_1) && __IPHONE_OS_VERSION_MAX_ALLOWED >= __IPHONE_27_1
+- (UIVerticalBarBehavior)preferredVerticalBarBehavior API_AVAILABLE(ios(27.1)) {
+    if (@available(iOS 27.1, *)) {
+        return [self zx_usesVisibleCustomNavigationBar]
+            ? UIVerticalBarBehaviorDisabled : UIVerticalBarBehaviorAutomatic;
+    }
+    return UIVerticalBarBehaviorAutomatic;
+}
+
+- (void)zx_requestVerticalBarConfigurationUpdate {
+    if (@available(iOS 27.1, *)) {
+        if ([self respondsToSelector:@selector(setNeedsUpdateOfVerticalBarConfiguration)]) {
+            [self setNeedsUpdateOfVerticalBarConfiguration];
+        }
+    }
+}
+#else
+- (void)zx_requestVerticalBarConfigurationUpdate {}
+#endif
+
 #pragma mark 初始化导航栏
 -(void)initNavBar{
     ZXNavigationBar *navBar = [[ZXNavigationBar alloc]init];
@@ -111,6 +146,17 @@ static ZXNavStatusBarStyle defaultNavStatusBarStyle = ZXNavStatusBarStyleDefault
     if(self.zx_disableAutoSetCustomNavBar){
         return;
     }
+    CGFloat safeTop = ZXNavigationBarSafeAreaInsetsForView(self.view).top;
+    if (self.xibTopConstraintArr.count &&
+        self.lastConstraintOffset == offset && self.lastConstraintSafeTop == safeTop &&
+        self.lastConstraintChecksSafeArea == checkSafeArea &&
+        self.lastConstraintDisablesSafeLayout == self.zx_disableNavAutoSafeLayout) {
+        return;
+    }
+    self.lastConstraintOffset = offset;
+    self.lastConstraintSafeTop = safeTop;
+    self.lastConstraintChecksSafeArea = checkSafeArea;
+    self.lastConstraintDisablesSafeLayout = self.zx_disableNavAutoSafeLayout;
     if(self.xibTopConstraintArr.count){
         for (ZXXibTopConstraintModel *constraintModel in self.xibTopConstraintArr) {
             [self updateTopConstraint:constraintModel offset:offset checkSafeArea:checkSafeArea];
@@ -163,7 +209,7 @@ static ZXNavStatusBarStyle defaultNavStatusBarStyle = ZXNavStatusBarStyleDefault
     }
     if(constraintModel.isToSafeArea && checkSafeArea){
         if (@available(iOS 11.0, *)) {
-            handleOffset -= ZXMainWindow.safeAreaInsets.top;
+            handleOffset -= ZXNavigationBarSafeAreaInsetsForView(self.view).top;
         }
     }
     constraintModel.constraint.constant = handleOffset;
@@ -171,76 +217,85 @@ static ZXNavStatusBarStyle defaultNavStatusBarStyle = ZXNavStatusBarStyleDefault
 
 #pragma mark 开启DisplayLink
 - (void)startDisplayLink{
+    [self.displayLink invalidate];
+    self.isNavFoldAnimating = YES;
     self.displayLink = [CADisplayLink displayLinkWithTarget:self selector:@selector(updateNavFoldingFrame:)];
     [self.displayLink addToRunLoop:[NSRunLoop currentRunLoop] forMode:NSRunLoopCommonModes];
 }
 
 #pragma mark 刷新导航栏位置
 - (void)relayoutSubviews{
-    if(self.zx_navBar){
-        if(!CGRectEqualToRect(self.zx_navFixFrame, CGRectZero)){
-            self.zx_navBar.frame = self.zx_navFixFrame;
-        }else{
-            if(self.zx_navIsFolded){
-                self.zx_navBar.frame = CGRectMake(0, 0, ZXScreenWidth, ZXAppStatusBarHeight);
-            }else{
-                self.zx_navBar.frame = CGRectMake(0, 0, ZXScreenWidth, [self getCurrentNavHeight]);
-            }
-        }
-        if(self.zx_navHandleFrameBlock){
-            self.zx_navBar.frame = self.zx_navHandleFrameBlock(self.zx_navBar.frame);
-        }
+    if (!self.zx_navBar) {
+        return;
     }
+    BOOL hasFixedFrame = !CGRectEqualToRect(self.zx_navFixFrame, CGRectZero);
+    CGFloat width = CGRectGetWidth(self.view.bounds);
+    if (width <= 0 && !hasFixedFrame) {
+        return;
+    }
+    CGFloat height = self.isNavFoldAnimating ? CGRectGetHeight(self.zx_navBar.frame) :
+        (self.zx_navIsFolded ? [self zx_currentStatusBarHeight] : [self getCurrentNavHeight]);
+    CGRect candidate = CGRectMake(0, 0, width, height);
+    if (width > 0 && self.zx_navHandleFrameBlock) {
+        candidate = self.zx_navHandleFrameBlock(candidate);
+    }
+    if (self.isNavFoldAnimating) {
+        candidate.size.height = height;
+    }
+    self.zx_navBar.frame = hasFixedFrame ? self.zx_navFixFrame : candidate;
+    [self.zx_navBar setNeedsLayout];
+    [self adjustNavContainerOffset:self.zx_hideBaseNavBar ? 0 : CGRectGetHeight(self.zx_navBar.frame)
+                    checkSafeArea:!self.zx_hideBaseNavBar];
 }
 
 #pragma mark 折叠导航栏时更新导航栏高度
 - (void)updateNavFoldingFrame:(CADisplayLink *)displayLink{
-    self.isNavFoldAnimating = YES;
-    if(self.setFold){
-        if(self.zx_navBar.zx_height > ZXAppStatusBarHeight){
-            if(self.zx_navBar.zx_height - self.zx_navFoldingSpeed < 0){
-                self.zx_navBar.zx_height = 0;
-            }else{
-                self.zx_navBar.zx_height -= self.zx_navFoldingSpeed;
-            }
-            for (ZXXibTopConstraintModel *constraintModel in self.xibTopConstraintArr) {
-                constraintModel.constraint.constant -= self.zx_navFoldingSpeed;
-            }
-            if(self.offsetBlock){
-                self.offsetBlock(-self.zx_navFoldingSpeed);
-            }
-            [self setAlphaOfNavSubViews:(self.zx_navBar.zx_height - ZXAppStatusBarHeight) / ([self getCurrentNavHeight] - ZXAppStatusBarHeight)];
-        }else{
-            self.isNavFoldAnimating = NO;
-            [self.displayLink invalidate];
-            self.displayLink = nil;
-            _zx_navIsFolded = self.setFold;
-            if(self.completionBlock){
-                self.completionBlock();
-            }
-            [self setAlphaOfNavSubViews:0];
-            [self relayoutSubviews];
+    if (displayLink != self.displayLink) {
+        return;
+    }
+    NSUInteger generation = self.foldGeneration;
+    BOOL folded = self.setFold;
+    foldingOffsetBlock offsetCallback = self.offsetBlock;
+    foldCompletionBlock completionCallback = self.completionBlock;
+    CGFloat statusHeight = [self zx_currentStatusBarHeight];
+    CGFloat fullHeight = [self getCurrentNavHeight];
+    CGFloat targetHeight = folded ? statusHeight : fullHeight;
+    if (!CGRectEqualToRect(self.zx_navFixFrame, CGRectZero)) {
+        targetHeight = CGRectGetHeight(self.zx_navFixFrame);
+    }
+    CGFloat previousHeight = CGRectGetHeight(self.zx_navBar.frame);
+    CGFloat nextHeight = previousHeight < targetHeight ?
+        MIN(targetHeight, previousHeight + self.zx_navFoldingSpeed) :
+        MAX(targetHeight, previousHeight - self.zx_navFoldingSpeed);
+    self.zx_navBar.zx_height = nextHeight;
+    [self relayoutSubviews];
+    // 布局 block 和位移回调都可能重入并替换当前动画事务。
+    if (generation != self.foldGeneration || displayLink != self.displayLink) {
+        return;
+    }
+    CGFloat denominator = fullHeight - statusHeight;
+    CGFloat alpha = denominator > 0 ? (nextHeight - statusHeight) / denominator : (folded ? 0 : 1);
+    [self setAlphaOfNavSubViews:MIN(1, MAX(0, alpha))];
+    if (offsetCallback && nextHeight != previousHeight) {
+        offsetCallback(nextHeight - previousHeight);
+    }
+    if (generation != self.foldGeneration || displayLink != self.displayLink) {
+        return;
+    }
+    if (nextHeight == targetHeight) {
+        self.isNavFoldAnimating = NO;
+        [displayLink invalidate];
+        self.displayLink = nil;
+        _zx_navIsFolded = folded;
+        self.offsetBlock = nil;
+        self.completionBlock = nil;
+        [self relayoutSubviews];
+        if (generation != self.foldGeneration) {
+            return;
         }
-    }else{
-        if(self.zx_navBar.zx_height < [self getCurrentNavHeight]){
-            self.zx_navBar.zx_height += self.zx_navFoldingSpeed;
-            for (ZXXibTopConstraintModel *constraintModel in self.xibTopConstraintArr) {
-                constraintModel.constraint.constant += self.zx_navFoldingSpeed;
-            }
-            if(self.offsetBlock){
-                self.offsetBlock(self.zx_navFoldingSpeed);
-            }
-            [self setAlphaOfNavSubViews:(self.zx_navBar.zx_height - ZXAppStatusBarHeight) / ([self getCurrentNavHeight] - ZXAppStatusBarHeight)];
-        }else{
-            self.isNavFoldAnimating = NO;
-            [self.displayLink invalidate];
-            self.displayLink = nil;
-            _zx_navIsFolded = self.setFold;
-            if(self.completionBlock){
-                self.completionBlock();
-            }
-            [self setAlphaOfNavSubViews:1];
-            [self relayoutSubviews];
+        [self setAlphaOfNavSubViews:folded ? 0 : 1];
+        if (completionCallback) {
+            completionCallback();
         }
     }
 }
@@ -254,10 +309,14 @@ static ZXNavStatusBarStyle defaultNavStatusBarStyle = ZXNavStatusBarStyleDefault
 
 #pragma mark 获取当前需要设置的导航栏高度
 - (CGFloat)getCurrentNavHeight{
-    if(self.zx_navFixHeight == -1){
-        return ZXNavBarHeight;
+    if (self.zx_navFixHeight != -1) {
+        return self.zx_navFixHeight;
     }
-    return self.zx_navFixHeight;
+    return [self zx_currentStatusBarHeight] + ZXNavBarHeightNotIncludeStatusBar;
+}
+
+- (CGFloat)zx_currentStatusBarHeight {
+    return ZXNavigationBarStatusBarHeightForView(self.view);
 }
 
 #pragma mark 获取返回按钮的图片
@@ -299,14 +358,14 @@ static ZXNavStatusBarStyle defaultNavStatusBarStyle = ZXNavStatusBarStyleDefault
                 if(weakSelf.doAutoSysBarAlphe){
                     nav.navigationBar.alpha = 1 - popOffsetProgress;
                     if(nav.navigationBar.alpha == 0){
-                        [UIApplication sharedApplication].keyWindow.backgroundColor = weakSelf.orgWindowColor;
+                        weakSelf.view.window.backgroundColor = weakSelf.orgWindowColor;
                     }else{
-                        if([UIApplication sharedApplication].keyWindow.backgroundColor != weakSelf.orgWindowColor){
-                            weakSelf.orgWindowColor = [UIApplication sharedApplication].keyWindow.backgroundColor;
+                        if(weakSelf.view.window.backgroundColor != weakSelf.orgWindowColor){
+                            weakSelf.orgWindowColor = weakSelf.view.window.backgroundColor;
                             if(nav.navigationBar.backgroundColor){
-                                [UIApplication sharedApplication].keyWindow.backgroundColor = nav.navigationBar.backgroundColor;
+                                weakSelf.view.window.backgroundColor = nav.navigationBar.backgroundColor;
                             }else{
-                                [UIApplication sharedApplication].keyWindow.backgroundColor = [UIColor whiteColor];
+                                weakSelf.view.window.backgroundColor = [UIColor whiteColor];
                             }
                         }
                         
@@ -415,6 +474,8 @@ static ZXNavStatusBarStyle defaultNavStatusBarStyle = ZXNavStatusBarStyleDefault
 
 
 - (void)setZx_hideBaseNavBar:(BOOL)zx_hideBaseNavBar{
+    BOOL stateChanged = _zx_hideBaseNavBar != zx_hideBaseNavBar ||
+        (self.zx_navBar && self.zx_navBar.hidden != zx_hideBaseNavBar);
     if(_zx_hideBaseNavBar != zx_hideBaseNavBar){
         if(zx_hideBaseNavBar){
             [self adjustNavContainerOffset:0 checkSafeArea:NO];
@@ -426,6 +487,9 @@ static ZXNavStatusBarStyle defaultNavStatusBarStyle = ZXNavStatusBarStyleDefault
     _zx_hideBaseNavBar = zx_hideBaseNavBar;
     if(self.zx_navBar){
         self.zx_navBar.hidden = zx_hideBaseNavBar;
+    }
+    if (stateChanged) {
+        [self zx_requestVerticalBarConfigurationUpdate];
     }
 }
 
@@ -448,6 +512,7 @@ static ZXNavStatusBarStyle defaultNavStatusBarStyle = ZXNavStatusBarStyleDefault
 }
 
 - (void)setZx_showSystemNavBar:(BOOL)zx_showSystemNavBar{
+    BOOL stateChanged = _zx_showSystemNavBar != zx_showSystemNavBar;
     _zx_showSystemNavBar = zx_showSystemNavBar;
     if(self.navigationController){
         self.zx_hideBaseNavBar = YES;
@@ -455,6 +520,15 @@ static ZXNavStatusBarStyle defaultNavStatusBarStyle = ZXNavStatusBarStyleDefault
         self.navigationController.navigationBarHidden = !zx_showSystemNavBar;
         [self checkDoAutoSysBarAlpha];
     }
+    if (stateChanged) {
+        [self zx_requestVerticalBarConfigurationUpdate];
+    }
+}
+
+- (void)setZx_disableAutoSetCustomNavBar:(BOOL)zx_disableAutoSetCustomNavBar {
+    if (_zx_disableAutoSetCustomNavBar == zx_disableAutoSetCustomNavBar) { return; }
+    _zx_disableAutoSetCustomNavBar = zx_disableAutoSetCustomNavBar;
+    [self zx_requestVerticalBarConfigurationUpdate];
 }
 
 - (void)setZx_navItemSize:(CGFloat)zx_navItemSize{
@@ -481,18 +555,19 @@ static ZXNavStatusBarStyle defaultNavStatusBarStyle = ZXNavStatusBarStyleDefault
     _zx_navEnableSmoothFromSystemNavBar = zx_navEnableSmoothFromSystemNavBar;
     if(self.zx_navBar){
         [self.zx_navBar setValue:@(zx_navEnableSmoothFromSystemNavBar) forKey:@"zx_navEnableSmoothFromSystemNavBar"];
-        [UIApplication sharedApplication].keyWindow.backgroundColor = self.zx_navBar.backgroundColor;
+        self.view.window.backgroundColor = self.zx_navBar.backgroundColor;
         [self checkDoAutoSysBarAlpha];
     }
 }
 
 - (void)setZx_handleAdjustNavContainerOffsetBlock:(CGFloat (^)(CGFloat, CGFloat))zx_handleAdjustNavContainerOffsetBlock{
     _zx_handleAdjustNavContainerOffsetBlock = zx_handleAdjustNavContainerOffsetBlock;
-    if(zx_handleAdjustNavContainerOffsetBlock){
-        ZXXibTopConstraintModel *constraintModel = self.xibTopConstraintArr.firstObject;
-        if(constraintModel){
-            [self adjustNavContainerOffset:constraintModel.constraint.constant - constraintModel.orgOffset];
-        }
+    if (self.xibTopConstraintArr.count) {
+        // 使用上一轮未经 block 处理的输入；新 block 不能复用旧 block 的缓存结果。
+        CGFloat offset = self.lastConstraintOffset;
+        BOOL checkSafeArea = self.lastConstraintChecksSafeArea;
+        self.lastConstraintOffset = NAN;
+        [self adjustNavContainerOffset:offset checkSafeArea:checkSafeArea];
     }
 }
 
@@ -812,6 +887,8 @@ static ZXNavStatusBarStyle defaultNavStatusBarStyle = ZXNavStatusBarStyleDefault
 
 #pragma mark 设置导航栏折叠效果
 - (void)zx_setNavFolded:(BOOL)folded speed:(int)speed foldingOffsetBlock:(foldingOffsetBlock)offsetBlock foldCompletionBlock:(foldCompletionBlock)completionBlock{
+    // 每次公开请求都是新的事务，包含同方向请求对回调/速度的替换。
+    self.foldGeneration += 1;
     self.offsetBlock = offsetBlock;
     self.completionBlock = completionBlock;
     if(speed > 0 && speed < 6){
@@ -917,6 +994,8 @@ static ZXNavStatusBarStyle defaultNavStatusBarStyle = ZXNavStatusBarStyleDefault
 
 #pragma mark 显示历史堆栈
 - (void)zx_showNavHistoryStackView{
+    UIView *containerView = self.view.window;
+    if (!containerView) { return; }
     if(self.navigationController && self.zx_showNavHistoryStackContentView){
         if(self.zx_handlePopBlock && !self.zx_handlePopBlock(self,ZXNavPopBlockFromHistoryStack)){
             return;
@@ -948,7 +1027,7 @@ static ZXNavStatusBarStyle defaultNavStatusBarStyle = ZXNavStatusBarStyleDefault
                 view.zx_historyStackArray = historyStackArray;
                 view.zx_historyStackViewLeft = self.zx_navLeftBtn.zx_x + self.zx_navHistoryStackContentViewOffsetX;
                 view.zx_historyStackViewStyle = self.zx_navHistoryStackViewStyle;
-                self.zx_navHistoryStackContentView = [view zx_show];
+                self.zx_navHistoryStackContentView = [view zx_showInContainerView:containerView anchorView:self.zx_navLeftBtn];
             }
         }
     }
@@ -1037,9 +1116,26 @@ static ZXNavStatusBarStyle defaultNavStatusBarStyle = ZXNavStatusBarStyleDefault
     if(self.zx_disableAutoSetCustomNavBar){
         return;
     }
-    if(!self.isNavFoldAnimating){
+    [self relayoutSubviews];
+    [self.zx_navBar layoutIfNeeded];
+    [self.zx_navHistoryStackContentView setNeedsLayout];
+}
+
+- (void)viewSafeAreaInsetsDidChange {
+    [super viewSafeAreaInsetsDidChange];
+    [self.view setNeedsLayout];
+}
+
+- (void)viewWillTransitionToSize:(CGSize)size
+     withTransitionCoordinator:(id<UIViewControllerTransitionCoordinator>)coordinator {
+    [super viewWillTransitionToSize:size withTransitionCoordinator:coordinator];
+    [coordinator animateAlongsideTransition:^(__unused id<UIViewControllerTransitionCoordinatorContext> context) {
+        [self.view setNeedsLayout];
+        [self.view layoutIfNeeded];
+    } completion:^(__unused id<UIViewControllerTransitionCoordinatorContext> context) {
         [self relayoutSubviews];
-    }
+        [self.view setNeedsLayout];
+    }];
 }
 
 #pragma mark - UIGestureRecognizerDelegate
@@ -1066,17 +1162,18 @@ static ZXNavStatusBarStyle defaultNavStatusBarStyle = ZXNavStatusBarStyleDefault
 #pragma mark 点击了系统导航栏返回按钮处理
 - (BOOL)zx_navSystemBarPopHandle{
     if(self.doAutoSysBarAlphe){
-        self.orgWindowColor = [UIApplication sharedApplication].keyWindow.backgroundColor;
+        self.orgWindowColor = self.view.window.backgroundColor;
         if(self.navigationController.navigationBar.backgroundColor){
-           [UIApplication sharedApplication].keyWindow.backgroundColor = self.navigationController.navigationBar.backgroundColor;
+           self.view.window.backgroundColor = self.navigationController.navigationBar.backgroundColor;
         }else{
-            [UIApplication sharedApplication].keyWindow.backgroundColor = [UIColor whiteColor];
+            self.view.window.backgroundColor = [UIColor whiteColor];
         }
         
+        __weak typeof(self) weakSelf = self;
         [UIView animateWithDuration:0.2 animations:^{
-            self.navigationController.navigationBar.alpha = 0.0;
+            weakSelf.navigationController.navigationBar.alpha = 0.0;
         } completion:^(BOOL finished) {
-            [UIApplication sharedApplication].keyWindow.backgroundColor = self.orgWindowColor;
+            weakSelf.view.window.backgroundColor = weakSelf.orgWindowColor;
         }];
     }
     if(self.zx_handlePopBlock){

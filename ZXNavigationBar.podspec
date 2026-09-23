@@ -5,7 +5,7 @@ s.summary      = '灵活轻量的自定义导航栏，轻松实现各种自定�
 s.homepage     = 'https://github.com/SmileZXLee/ZXNavigationBar'
 s.license      = 'MIT'
 s.authors      = {'李兆祥' => '393727164@qq.com'}
-s.platform     = :ios, '8.0'
+s.platform     = :ios, '16.0'
 s.source       = {:git => 'https://github.com/SmileZXLee/ZXNavigationBar.git', :tag => s.version}
 s.source_files = 'ZXNavigationBar/**/*.{h,m}'
 s.resource     = 'ZXNavigationBar/ZXNavigationBar.bundle'
